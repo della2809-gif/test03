@@ -241,11 +241,20 @@ function AssessmentResult({
   const [checkupUpload, setCheckupUpload] = useState("");
   const [inbodyUpload, setInbodyUpload] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [checkupValues, setCheckupValues] = useState<Record<string, string>>(
+    {},
+  );
+  const [inbodyValues, setInbodyValues] = useState<Record<string, string>>({});
   const enhancedConfidence = calculateEnhancedConfidence(
     result.dataConfidence,
     checkupSaved,
     inbodySaved,
   );
+
+  function openInput(type: "checkup" | "inbody") {
+    setInputPanel(type);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function selectUpload(type: "checkup" | "inbody", file?: File) {
     if (!file) return;
@@ -256,7 +265,43 @@ function AssessmentResult({
     setUploadError("");
     if (type === "checkup") setCheckupUpload(file.name);
     else setInbodyUpload(file.name);
-    setInputPanel(type);
+    openInput(type);
+  }
+
+  if (inputPanel) {
+    const isCheckup = inputPanel === "checkup";
+    return (
+      <main className="assessment-objective-page">
+        <button
+          className="objective-page-back"
+          onClick={() => setInputPanel(null)}
+        >
+          ← 건강자산 결과로 돌아가기
+        </button>
+        <div className="objective-page-progress">
+          <span>건강진단 완료</span><i>→</i>
+          <b>{isCheckup ? "건강검진 입력" : "인바디 입력"}</b><i>→</i>
+          <span>신뢰도 반영</span>
+        </div>
+        <ObjectiveDataForm
+          type={inputPanel}
+          selectedFileName={isCheckup ? checkupUpload : inbodyUpload}
+          initialValues={isCheckup ? checkupValues : inbodyValues}
+          onCancel={() => setInputPanel(null)}
+          onSave={(values) => {
+            if (isCheckup) {
+              setCheckupValues(values);
+              setCheckupSaved(true);
+            } else {
+              setInbodyValues(values);
+              setInbodySaved(true);
+            }
+            setInputPanel(null);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      </main>
+    );
   }
 
   return (
@@ -304,7 +349,7 @@ function AssessmentResult({
             </div>
             {checkupUpload && <div className="selected-upload">📄 {checkupUpload}<span>수치 확인 필요</span></div>}
             <div className="objective-entry-buttons">
-              <button onClick={() => setInputPanel("checkup")}>
+              <button onClick={() => openInput("checkup")}>
                 {checkupSaved ? "입력 수치 수정" : "수치 직접 입력"}
               </button>
               <label>
@@ -327,7 +372,7 @@ function AssessmentResult({
             </div>
             {inbodyUpload && <div className="selected-upload">📄 {inbodyUpload}<span>수치 확인 필요</span></div>}
             <div className="objective-entry-buttons">
-              <button onClick={() => setInputPanel("inbody")}>
+              <button onClick={() => openInput("inbody")}>
                 {inbodySaved ? "입력 수치 수정" : "수치 직접 입력"}
               </button>
               <label>
@@ -346,28 +391,6 @@ function AssessmentResult({
         {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
         <p className="upload-privacy">🔒 공개 데모에서는 선택한 파일을 서버로 전송하거나 저장하지 않습니다. 파일을 선택하면 결과지 수치를 확인하는 입력 화면으로 이동합니다.</p>
       </section>
-      {inputPanel === "checkup" && (
-        <ObjectiveDataForm
-          type="checkup"
-          selectedFileName={checkupUpload}
-          onCancel={() => setInputPanel(null)}
-          onSave={() => {
-            setCheckupSaved(true);
-            setInputPanel(null);
-          }}
-        />
-      )}
-      {inputPanel === "inbody" && (
-        <ObjectiveDataForm
-          type="inbody"
-          selectedFileName={inbodyUpload}
-          onCancel={() => setInputPanel(null)}
-          onSave={() => {
-            setInbodySaved(true);
-            setInputPanel(null);
-          }}
-        />
-      )}
       {showMethod && (
         <section className="method-panel">
           <div><b>증상 문진</b><span>35%</span><i className="filled" /></div>
@@ -442,24 +465,27 @@ const INBODY_FIELDS = [
 function ObjectiveDataForm({
   type,
   selectedFileName,
+  initialValues,
   onCancel,
   onSave,
 }: {
   type: "checkup" | "inbody";
   selectedFileName?: string;
+  initialValues: Record<string, string>;
   onCancel: () => void;
-  onSave: () => void;
+  onSave: (values: Record<string, string>) => void;
 }) {
   const fields = type === "checkup" ? CHECKUP_FIELDS : INBODY_FIELDS;
   const title = type === "checkup" ? "건강검진 수치 입력" : "인바디 수치 입력";
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] =
+    useState<Record<string, string>>(initialValues);
 
   return (
     <form
       className="objective-data-form"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave();
+        onSave(values);
       }}
     >
       <div className="objective-form-head">
@@ -470,6 +496,16 @@ function ObjectiveDataForm({
         </div>
         <button type="button" onClick={onCancel} aria-label="입력 닫기">×</button>
       </div>
+      {selectedFileName && (
+        <div className="objective-upload-receipt">
+          <i>✓</i>
+          <div>
+            <b>결과지 파일을 불러왔어요.</b>
+            <span>{selectedFileName}</span>
+          </div>
+          <em>수치 확인 단계</em>
+        </div>
+      )}
       <div className="objective-field-grid">
         {fields.map((field) => (
           <label key={field.id}>
