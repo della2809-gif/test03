@@ -122,3 +122,13 @@ export function isAssessmentComplete(answers: AssessmentAnswers) {
     (question) => answers[question.id] !== undefined,
   );
 }
+
+export function calculateEnhancedConfidence(
+  baseConfidence: number,
+  hasCheckup: boolean,
+  hasBodyComposition: boolean,
+) {
+  return clamp(
+    baseConfidence + (hasCheckup ? 20 : 0) + (hasBodyComposition ? 15 : 0),
+  );
+}

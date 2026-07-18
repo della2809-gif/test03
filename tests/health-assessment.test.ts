@@ -7,6 +7,7 @@ import {
 } from "../features/health-assessment/questions.ts";
 import {
   calculateAssessmentResult,
+  calculateEnhancedConfidence,
   isAssessmentComplete,
 } from "../features/health-assessment/scoring.ts";
 import type { AssessmentAnswers } from "../features/health-assessment/types.ts";
@@ -52,6 +53,13 @@ test("건강체크와 생활습관 완료 시 데이터 신뢰도는 65%다", ()
   assert.equal(result.dataConfidence, 65);
   assert.equal(result.completionRate, 100);
   assert.equal(result.scoreVersion, "wellset-score-v1");
+});
+
+test("건강검진과 인바디 입력은 데이터 신뢰도를 각각 보완한다", () => {
+  assert.equal(calculateEnhancedConfidence(65, false, false), 65);
+  assert.equal(calculateEnhancedConfidence(65, true, false), 85);
+  assert.equal(calculateEnhancedConfidence(65, false, true), 80);
+  assert.equal(calculateEnhancedConfidence(65, true, true), 100);
 });
 
 test("검진과 인바디가 없어도 문진 자료끼리 재정규화한다", () => {

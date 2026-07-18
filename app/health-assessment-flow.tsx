@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { HEALTH_CHECK_QUESTIONS, LIFESTYLE_QUESTIONS, ASSESSMENT_QUESTIONS } from "../features/health-assessment/questions.ts";
 import {
+  calculateEnhancedConfidence,
   calculateAssessmentResult,
   isAssessmentComplete,
 } from "../features/health-assessment/scoring.ts";
@@ -232,6 +233,17 @@ function AssessmentResult({
   goPassport: () => void;
 }) {
   const [showMethod, setShowMethod] = useState(false);
+  const [inputPanel, setInputPanel] = useState<"checkup" | "inbody" | null>(
+    null,
+  );
+  const [checkupSaved, setCheckupSaved] = useState(false);
+  const [inbodySaved, setInbodySaved] = useState(false);
+  const enhancedConfidence = calculateEnhancedConfidence(
+    result.dataConfidence,
+    checkupSaved,
+    inbodySaved,
+  );
+
   return (
     <main className="assessment-result-page">
       <section className="result-hero-new">
@@ -253,18 +265,58 @@ function AssessmentResult({
       <section className="confidence-panel">
         <div>
           <span>데이터 신뢰도</span>
-          <strong>{result.dataConfidence}%</strong>
-          <i><b style={{ width: `${result.dataConfidence}%` }} /></i>
+          <strong>{enhancedConfidence}%</strong>
+          <i><b style={{ width: `${enhancedConfidence}%` }} /></i>
         </div>
-        <p><b>현재 문진 데이터는 충분히 입력됐어요.</b> 건강검진을 추가하면 +20%, 인바디를 추가하면 +15%만큼 분석 근거가 보완됩니다.</p>
+        <p><b>{enhancedConfidence === 100 ? "문진과 객관적 자료가 모두 입력됐어요." : "현재 문진 데이터는 충분히 입력됐어요."}</b> 건강검진을 추가하면 +20%, 인바디를 추가하면 +15%만큼 분석 근거가 보완됩니다.</p>
         <button onClick={() => setShowMethod(!showMethod)}>{showMethod ? "계산 방식 닫기" : "계산 방식 보기"}</button>
+        <div className="objective-input-actions">
+          <button
+            className={checkupSaved ? "complete" : ""}
+            onClick={() =>
+              setInputPanel(inputPanel === "checkup" ? null : "checkup")
+            }
+          >
+            <i>{checkupSaved ? "✓" : "+"}</i>
+            <span><b>건강검진 수치 입력</b><small>{checkupSaved ? "입력 완료 · 수정하기" : "혈압·혈당·지질·간수치 · +20%"}</small></span>
+          </button>
+          <button
+            className={inbodySaved ? "complete" : ""}
+            onClick={() =>
+              setInputPanel(inputPanel === "inbody" ? null : "inbody")
+            }
+          >
+            <i>{inbodySaved ? "✓" : "+"}</i>
+            <span><b>인바디 수치 입력</b><small>{inbodySaved ? "입력 완료 · 수정하기" : "체중·체지방·골격근 · +15%"}</small></span>
+          </button>
+        </div>
       </section>
+      {inputPanel === "checkup" && (
+        <ObjectiveDataForm
+          type="checkup"
+          onCancel={() => setInputPanel(null)}
+          onSave={() => {
+            setCheckupSaved(true);
+            setInputPanel(null);
+          }}
+        />
+      )}
+      {inputPanel === "inbody" && (
+        <ObjectiveDataForm
+          type="inbody"
+          onCancel={() => setInputPanel(null)}
+          onSave={() => {
+            setInbodySaved(true);
+            setInputPanel(null);
+          }}
+        />
+      )}
       {showMethod && (
         <section className="method-panel">
           <div><b>증상 문진</b><span>35%</span><i className="filled" /></div>
           <div><b>생활습관</b><span>30%</span><i className="filled" /></div>
-          <div><b>건강검진</b><span>20%</span><i /></div>
-          <div><b>인바디</b><span>15%</span><i /></div>
+          <div><b>건강검진</b><span>20%</span><i className={checkupSaved ? "filled" : ""} /></div>
+          <div><b>인바디</b><span>15%</span><i className={inbodySaved ? "filled" : ""} /></div>
           <p>없는 자료는 0점 처리하지 않고, 현재 입력된 자료의 가중치를 다시 합산해 점수를 계산합니다. 점수 버전: {result.scoreVersion}</p>
         </section>
       )}
@@ -307,5 +359,89 @@ function AssessmentResult({
         <p>심한 흉통, 갑작스러운 호흡곤란, 마비나 의식 저하 같은 증상이 있다면 일반 코칭보다 즉시 의료기관 또는 응급서비스 확인이 우선입니다.</p>
       </div>
     </main>
+  );
+}
+
+const CHECKUP_FIELDS = [
+  { id: "systolic", label: "수축기 혈압", unit: "mmHg", min: 50, max: 260, step: 1 },
+  { id: "diastolic", label: "이완기 혈압", unit: "mmHg", min: 30, max: 180, step: 1 },
+  { id: "fastingGlucose", label: "공복혈당", unit: "mg/dL", min: 30, max: 600, step: 1 },
+  { id: "hba1c", label: "당화혈색소", unit: "%", min: 2, max: 20, step: 0.1 },
+  { id: "ldl", label: "LDL 콜레스테롤", unit: "mg/dL", min: 10, max: 500, step: 1 },
+  { id: "hdl", label: "HDL 콜레스테롤", unit: "mg/dL", min: 5, max: 200, step: 1 },
+  { id: "triglycerides", label: "중성지방", unit: "mg/dL", min: 10, max: 1500, step: 1 },
+  { id: "alt", label: "ALT", unit: "U/L", min: 1, max: 1000, step: 1 },
+] as const;
+
+const INBODY_FIELDS = [
+  { id: "height", label: "신장", unit: "cm", min: 100, max: 230, step: 0.1 },
+  { id: "weight", label: "체중", unit: "kg", min: 20, max: 300, step: 0.1 },
+  { id: "bmi", label: "BMI", unit: "kg/㎡", min: 10, max: 70, step: 0.1 },
+  { id: "bodyFat", label: "체지방률", unit: "%", min: 1, max: 70, step: 0.1 },
+  { id: "skeletalMuscle", label: "골격근량", unit: "kg", min: 5, max: 100, step: 0.1 },
+  { id: "visceralFat", label: "내장지방 레벨", unit: "레벨", min: 1, max: 30, step: 1 },
+] as const;
+
+function ObjectiveDataForm({
+  type,
+  onCancel,
+  onSave,
+}: {
+  type: "checkup" | "inbody";
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const fields = type === "checkup" ? CHECKUP_FIELDS : INBODY_FIELDS;
+  const title = type === "checkup" ? "건강검진 수치 입력" : "인바디 수치 입력";
+  const [values, setValues] = useState<Record<string, string>>({});
+
+  return (
+    <form
+      className="objective-data-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+    >
+      <div className="objective-form-head">
+        <div>
+          <span>{type === "checkup" ? "HEALTH CHECKUP" : "BODY COMPOSITION"}</span>
+          <h2>{title}</h2>
+          <p>결과지에 표시된 수치를 그대로 입력해주세요. 모든 항목은 필수입니다.</p>
+        </div>
+        <button type="button" onClick={onCancel} aria-label="입력 닫기">×</button>
+      </div>
+      <div className="objective-field-grid">
+        {fields.map((field) => (
+          <label key={field.id}>
+            <span>{field.label}</span>
+            <div>
+              <input
+                required
+                type="number"
+                inputMode="decimal"
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                value={values[field.id] ?? ""}
+                onChange={(event) =>
+                  setValues({ ...values, [field.id]: event.target.value })
+                }
+                aria-describedby={`${field.id}-unit`}
+              />
+              <b id={`${field.id}-unit`}>{field.unit}</b>
+            </div>
+          </label>
+        ))}
+      </div>
+      <div className="objective-form-notice">
+        <b>개인정보 안내</b>
+        공개 데모에서는 입력값을 서버 또는 브라우저 저장소에 보관하지 않고 현재 화면의 신뢰도 표시만 갱신합니다.
+      </div>
+      <div className="objective-form-actions">
+        <button type="button" onClick={onCancel}>취소</button>
+        <button type="submit">입력 완료 · 신뢰도 반영</button>
+      </div>
+    </form>
   );
 }
