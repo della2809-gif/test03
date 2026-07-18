@@ -238,11 +238,26 @@ function AssessmentResult({
   );
   const [checkupSaved, setCheckupSaved] = useState(false);
   const [inbodySaved, setInbodySaved] = useState(false);
+  const [checkupUpload, setCheckupUpload] = useState("");
+  const [inbodyUpload, setInbodyUpload] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const enhancedConfidence = calculateEnhancedConfidence(
     result.dataConfidence,
     checkupSaved,
     inbodySaved,
   );
+
+  function selectUpload(type: "checkup" | "inbody", file?: File) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("파일 크기는 10MB 이하만 선택할 수 있습니다.");
+      return;
+    }
+    setUploadError("");
+    if (type === "checkup") setCheckupUpload(file.name);
+    else setInbodyUpload(file.name);
+    setInputPanel(type);
+  }
 
   return (
     <main className="assessment-result-page">
@@ -270,30 +285,71 @@ function AssessmentResult({
         </div>
         <p><b>{enhancedConfidence === 100 ? "문진과 객관적 자료가 모두 입력됐어요." : "현재 문진 데이터는 충분히 입력됐어요."}</b> 건강검진을 추가하면 +20%, 인바디를 추가하면 +15%만큼 분석 근거가 보완됩니다.</p>
         <button onClick={() => setShowMethod(!showMethod)}>{showMethod ? "계산 방식 닫기" : "계산 방식 보기"}</button>
-        <div className="objective-input-actions">
-          <button
-            className={checkupSaved ? "complete" : ""}
-            onClick={() =>
-              setInputPanel(inputPanel === "checkup" ? null : "checkup")
-            }
-          >
-            <i>{checkupSaved ? "✓" : "+"}</i>
-            <span><b>건강검진 수치 입력</b><small>{checkupSaved ? "입력 완료 · 수정하기" : "혈압·혈당·지질·간수치 · +20%"}</small></span>
-          </button>
-          <button
-            className={inbodySaved ? "complete" : ""}
-            onClick={() =>
-              setInputPanel(inputPanel === "inbody" ? null : "inbody")
-            }
-          >
-            <i>{inbodySaved ? "✓" : "+"}</i>
-            <span><b>인바디 수치 입력</b><small>{inbodySaved ? "입력 완료 · 수정하기" : "체중·체지방·골격근 · +15%"}</small></span>
-          </button>
+      </section>
+      <section className="objective-entry-panel">
+        <div className="objective-entry-head">
+          <div>
+            <span>ADD OBJECTIVE DATA</span>
+            <h2>객관적 자료를 추가해 분석 근거를 높이세요.</h2>
+            <p>수치를 직접 입력하거나 결과지 이미지·PDF를 선택할 수 있습니다.</p>
+          </div>
+          <b>최대 신뢰도 100%</b>
         </div>
+        <div className="objective-entry-grid">
+          <article className={checkupSaved ? "complete" : ""}>
+            <div className="objective-entry-title">
+              <i>{checkupSaved ? "✓" : "01"}</i>
+              <div><h3>건강검진</h3><p>혈압·혈당·지질·간수치</p></div>
+              <strong>+20%</strong>
+            </div>
+            {checkupUpload && <div className="selected-upload">📄 {checkupUpload}<span>수치 확인 필요</span></div>}
+            <div className="objective-entry-buttons">
+              <button onClick={() => setInputPanel("checkup")}>
+                {checkupSaved ? "입력 수치 수정" : "수치 직접 입력"}
+              </button>
+              <label>
+                결과지 업로드
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(event) =>
+                    selectUpload("checkup", event.target.files?.[0])
+                  }
+                />
+              </label>
+            </div>
+          </article>
+          <article className={inbodySaved ? "complete" : ""}>
+            <div className="objective-entry-title">
+              <i>{inbodySaved ? "✓" : "02"}</i>
+              <div><h3>인바디</h3><p>체중·체지방·골격근·내장지방</p></div>
+              <strong>+15%</strong>
+            </div>
+            {inbodyUpload && <div className="selected-upload">📄 {inbodyUpload}<span>수치 확인 필요</span></div>}
+            <div className="objective-entry-buttons">
+              <button onClick={() => setInputPanel("inbody")}>
+                {inbodySaved ? "입력 수치 수정" : "수치 직접 입력"}
+              </button>
+              <label>
+                결과지 업로드
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(event) =>
+                    selectUpload("inbody", event.target.files?.[0])
+                  }
+                />
+              </label>
+            </div>
+          </article>
+        </div>
+        {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
+        <p className="upload-privacy">🔒 공개 데모에서는 선택한 파일을 서버로 전송하거나 저장하지 않습니다. 파일을 선택하면 결과지 수치를 확인하는 입력 화면으로 이동합니다.</p>
       </section>
       {inputPanel === "checkup" && (
         <ObjectiveDataForm
           type="checkup"
+          selectedFileName={checkupUpload}
           onCancel={() => setInputPanel(null)}
           onSave={() => {
             setCheckupSaved(true);
@@ -304,6 +360,7 @@ function AssessmentResult({
       {inputPanel === "inbody" && (
         <ObjectiveDataForm
           type="inbody"
+          selectedFileName={inbodyUpload}
           onCancel={() => setInputPanel(null)}
           onSave={() => {
             setInbodySaved(true);
@@ -384,10 +441,12 @@ const INBODY_FIELDS = [
 
 function ObjectiveDataForm({
   type,
+  selectedFileName,
   onCancel,
   onSave,
 }: {
   type: "checkup" | "inbody";
+  selectedFileName?: string;
   onCancel: () => void;
   onSave: () => void;
 }) {
@@ -407,7 +466,7 @@ function ObjectiveDataForm({
         <div>
           <span>{type === "checkup" ? "HEALTH CHECKUP" : "BODY COMPOSITION"}</span>
           <h2>{title}</h2>
-          <p>결과지에 표시된 수치를 그대로 입력해주세요. 모든 항목은 필수입니다.</p>
+          <p>{selectedFileName ? `${selectedFileName} 파일을 선택했습니다. 결과지의 수치를 확인해 입력해주세요.` : "결과지에 표시된 수치를 그대로 입력해주세요. 모든 항목은 필수입니다."}</p>
         </div>
         <button type="button" onClick={onCancel} aria-label="입력 닫기">×</button>
       </div>
