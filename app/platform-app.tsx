@@ -202,6 +202,7 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
 function Passport({ score, goCheck, goMission }: { score: number; goCheck: () => void; goMission: () => void }) {
   const [period, setPeriod] = useState<HealthLedgerPeriod>("week");
   const [selectedMetric, setSelectedMetric] = useState<HealthMetric>("weight");
+  const [metricHistoryOpen, setMetricHistoryOpen] = useState(false);
   const summaries = aggregateHealthLedger(healthLedger, period);
   const measurements = aggregateHealthMeasurements(healthMeasurements, period);
   const current = summaries[0];
@@ -259,15 +260,39 @@ function Passport({ score, goCheck, goMission }: { score: number; goCheck: () =>
     <div className="passport-dashboard">
       <section className="passport-score"><span>2026년 7월 건강자산</span><strong>{score}</strong><b>지난달보다 +4</b><div className="spark">{[30, 35, 42, 39, 52, 57, 68, 74].map((height, i) => <i key={i} style={{ height: `${height}%` }} />)}</div></section>
       <section className="passport-records">
-        {metricCards.map((item) => <button type="button" className={selectedMetric === item.id ? "active" : ""} onClick={() => setSelectedMetric(item.id)} key={item.id}><span>{item.label}</span><strong>{item.value}<small>{item.unit}</small></strong><b>{item.change}</b><em>추이 보기 →</em></button>)}
+        {metricCards.map((item) => (
+          <button
+            type="button"
+            className={metricHistoryOpen && selectedMetric === item.id ? "active" : ""}
+            aria-expanded={metricHistoryOpen && selectedMetric === item.id}
+            aria-controls="health-metric-history"
+            onClick={() => {
+              if (selectedMetric === item.id) {
+                setMetricHistoryOpen(!metricHistoryOpen);
+              } else {
+                setSelectedMetric(item.id);
+                setMetricHistoryOpen(true);
+              }
+            }}
+            key={item.id}
+          >
+            <span>{item.label}</span>
+            <strong>{item.value}<small>{item.unit}</small></strong>
+            <b>{item.change}</b>
+            <em>{metricHistoryOpen && selectedMetric === item.id ? "추이 닫기 ↑" : "추이 보기 ↓"}</em>
+          </button>
+        ))}
       </section>
     </div>
-    <section className="health-metric-history">
+    {metricHistoryOpen && <section className="health-metric-history" id="health-metric-history">
       <div className="health-metric-head">
         <div><span>HEALTH METRIC HISTORY</span><h2>{metricInfo[selectedMetric].label} 누적 추이</h2><p>{metricInfo[selectedMetric].note}을 기준으로 표시합니다.</p></div>
-        <div className="account-period-tabs" role="group" aria-label="건강수치 조회 기간">
-          <button className={period === "week" ? "active" : ""} onClick={() => setPeriod("week")}>주간</button>
-          <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>월간</button>
+        <div className="health-metric-actions">
+          <div className="account-period-tabs" role="group" aria-label="건강수치 조회 기간">
+            <button className={period === "week" ? "active" : ""} onClick={() => setPeriod("week")}>주간</button>
+            <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>월간</button>
+          </div>
+          <button className="health-metric-close" onClick={() => setMetricHistoryOpen(false)}>닫기 ×</button>
         </div>
       </div>
       <div className="health-metric-chart">
@@ -280,7 +305,7 @@ function Passport({ score, goCheck, goMission }: { score: number; goCheck: () =>
         ))}
       </div>
       <p className="health-metric-footnote">체중·골격근량·혈압은 합산하지 않고 변화 추이를 보여주며, 운동시간만 기간별로 누적합니다.</p>
-    </section>
+    </section>}
     <section className="account-accumulation">
       <div className="account-period-head">
         <div><span>ACCUMULATED REPORT</span><h2>주·월 누적 건강자산</h2><p>기록된 행동과 측정 결과를 기간별로 합산했어요.</p></div>
