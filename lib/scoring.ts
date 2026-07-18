@@ -1,8 +1,132 @@
-export type AxisScore={assetScore:number;confidenceScore:number;baseWeight?:number};
-export const AXES=[["metabolic","혈당대사력"],["energy","에너지 생산력"],["digestive","소화건강력"],["inflammation","염증 균형력"],["immune","면역 방어력"],["hormone","호르몬 균형력"],["detox","해독·정화력"],["brain","집중·기억력"],["circulation","혈관 건강력"],["muscle","근골격 활력"],["youth","젊음지수"],["recovery","수면·회복력"]].map(([code,name])=>({code,name,baseWeight:1}));
-export const clamp=(n:number)=>Math.min(100,Math.max(0,n));
-export function calculateConfidence(x:{questionnaire:boolean;lifestyle:boolean;bodyComposition:boolean;biomarkers:boolean;healthHistory:boolean}){return clamp((x.questionnaire?35:0)+(x.lifestyle?15:0)+(x.bodyComposition?15:0)+(x.biomarkers?25:0)+(x.healthHistory?10:0))}
-const factor=(n:number)=>n>=80?1:n>=60?.85:n>=40?.65:.4;
-export function calculateOverallAsset(axes:AxisScore[]){if(!axes.length)return 0;const x=axes.reduce((s,a)=>{const w=(a.baseWeight??1)*factor(a.confidenceScore);return{total:s.total+clamp(a.assetScore)*w,weight:s.weight+w}},{total:0,weight:0});return Math.round(x.total/x.weight)}
-export function calculatePriority(x:{concern:number;objective?:number;impact?:number;persistence?:number;upstream:number;trend?:number}){const p=[{v:x.concern,w:.45},{v:x.objective,w:.2},{v:x.impact,w:.1},{v:x.persistence,w:.08},{v:x.upstream,w:.1},{v:x.trend,w:.07}].filter((a):a is {v:number;w:number}=>a.v!==undefined);const w=p.reduce((s,a)=>s+a.w,0);return Math.round(p.reduce((s,a)=>s+clamp(a.v)*a.w,0)/w)}
-export const calculateAxisAsset=(concern:number)=>clamp(100-clamp(concern));
+import {
+  HEALTH_ASSET_DOMAINS,
+  SCORE_VERSION,
+} from "../config/health-assets.ts";
+
+export type AxisScore = {
+  assetScore: number;
+  confidenceScore: number;
+  baseWeight?: number;
+};
+
+export type HealthAssetSources = {
+  symptoms?: number;
+  lifestyle?: number;
+  checkup?: number;
+  bodyComposition?: number;
+};
+
+export const HEALTH_ASSET_WEIGHTS = {
+  symptoms: 35,
+  lifestyle: 30,
+  checkup: 20,
+  bodyComposition: 15,
+} as const;
+
+export const AXES = HEALTH_ASSET_DOMAINS.map(({ code, name }) => ({
+  code,
+  name,
+  baseWeight: 1,
+}));
+
+export const clamp = (value: number) => Math.min(100, Math.max(0, value));
+
+export function weightedAverage(
+  values: Array<{ score: number; weight: number }>,
+): number {
+  const available = values.filter(
+    ({ score, weight }) =>
+      Number.isFinite(score) && Number.isFinite(weight) && weight > 0,
+  );
+  if (!available.length) return 0;
+  const weightTotal = available.reduce((sum, item) => sum + item.weight, 0);
+  const scoreTotal = available.reduce(
+    (sum, item) => sum + clamp(item.score) * item.weight,
+    0,
+  );
+  return Math.round(scoreTotal / weightTotal);
+}
+
+export function calculateHealthAssetScore(sources: HealthAssetSources) {
+  const entries = Object.entries(sources)
+    .filter((entry): entry is [keyof HealthAssetSources, number] =>
+      Number.isFinite(entry[1]),
+    )
+    .map(([key, score]) => ({
+      score,
+      weight: HEALTH_ASSET_WEIGHTS[key],
+    }));
+
+  return {
+    score: weightedAverage(entries),
+    confidence: Math.round(
+      entries.reduce((sum, item) => sum + item.weight, 0),
+    ),
+    scoreVersion: SCORE_VERSION,
+  };
+}
+
+export function calculateConfidence(input: {
+  questionnaire: boolean;
+  lifestyle: boolean;
+  bodyComposition: boolean;
+  biomarkers: boolean;
+  healthHistory: boolean;
+}) {
+  return clamp(
+    (input.questionnaire ? 35 : 0) +
+      (input.lifestyle ? 15 : 0) +
+      (input.bodyComposition ? 15 : 0) +
+      (input.biomarkers ? 25 : 0) +
+      (input.healthHistory ? 10 : 0),
+  );
+}
+
+const confidenceFactor = (value: number) =>
+  value >= 80 ? 1 : value >= 60 ? 0.85 : value >= 40 ? 0.65 : 0.4;
+
+export function calculateOverallAsset(axes: AxisScore[]) {
+  if (!axes.length) return 0;
+  return weightedAverage(
+    axes.map((axis) => ({
+      score: axis.assetScore,
+      weight:
+        (axis.baseWeight ?? 1) * confidenceFactor(axis.confidenceScore),
+    })),
+  );
+}
+
+export function calculatePriority(input: {
+  concern: number;
+  objective?: number;
+  impact?: number;
+  persistence?: number;
+  upstream: number;
+  trend?: number;
+}) {
+  const parts = [
+    { value: input.concern, weight: 0.45 },
+    { value: input.objective, weight: 0.2 },
+    { value: input.impact, weight: 0.1 },
+    { value: input.persistence, weight: 0.08 },
+    { value: input.upstream, weight: 0.1 },
+    { value: input.trend, weight: 0.07 },
+  ].filter(
+    (part): part is { value: number; weight: number } =>
+      part.value !== undefined,
+  );
+  return weightedAverage(
+    parts.map(({ value, weight }) => ({ score: value, weight })),
+  );
+}
+
+export function getScoreStatus(score: number) {
+  const value = clamp(score);
+  if (value >= 80) return "안정적으로 관리 중";
+  if (value >= 60) return "관심 필요";
+  if (value >= 40) return "집중관리 권장";
+  return "전문가 확인 고려";
+}
+
+export const calculateAxisAsset = (concern: number) =>
+  clamp(100 - clamp(concern));
