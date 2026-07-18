@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { HealthCoachingApp } from "./health-coaching-app";
+import { PlatformApp } from "./platform-app";
 
 export const metadata: Metadata = {
-  title: "건강자산 | 프리미엄 건강 코칭",
-  description: "문진과 현장 측정 데이터를 연결해 관리 우선순위를 찾는 프리미엄 건강 코칭 워크스페이스",
+  title: "건강자산 | 건강도 관리하면 복리가 됩니다",
+  description: "5분 무료 AI 건강체크부터 건강여권, 30일 미션, 인바디 기반 VIP 대면 코칭까지 이어지는 건강자산관리 플랫폼",
 };
 
 export default function Home() {
-  return <HealthCoachingApp />;
+  return <PlatformApp />;
 }
