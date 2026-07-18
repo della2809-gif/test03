@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { HEALTH_CHECK_QUESTIONS, LIFESTYLE_QUESTIONS, ASSESSMENT_QUESTIONS } from "../features/health-assessment/questions.ts";
 import {
-  calculateEnhancedConfidence,
   calculateAssessmentResult,
   isAssessmentComplete,
 } from "../features/health-assessment/scoring.ts";
@@ -11,6 +10,12 @@ import type {
   AssessmentAnswers,
   HealthAssessmentResult,
 } from "../features/health-assessment/types.ts";
+import {
+  applyObjectiveData,
+  assessBodyCompositionData,
+  assessCheckupData,
+  type ObjectiveDataAssessment,
+} from "../features/clinical-rules/index.ts";
 
 const STORAGE_KEY = "wellset-health-assessment-v1";
 
@@ -245,10 +250,26 @@ function AssessmentResult({
     {},
   );
   const [inbodyValues, setInbodyValues] = useState<Record<string, string>>({});
-  const enhancedConfidence = calculateEnhancedConfidence(
-    result.dataConfidence,
-    checkupSaved,
-    inbodySaved,
+  const checkupAssessment = useMemo(
+    () => (checkupSaved ? assessCheckupData(checkupValues) : undefined),
+    [checkupSaved, checkupValues],
+  );
+  const bodyAssessment = useMemo(
+    () =>
+      inbodySaved ? assessBodyCompositionData(inbodyValues) : undefined,
+    [inbodySaved, inbodyValues],
+  );
+  const displayResult = useMemo(
+    () =>
+      applyObjectiveData(result, {
+        checkup: checkupAssessment,
+        bodyComposition: bodyAssessment,
+      }),
+    [result, checkupAssessment, bodyAssessment],
+  );
+  const enhancedConfidence = displayResult.dataConfidence;
+  const objectiveAssessments = [checkupAssessment, bodyAssessment].filter(
+    (item): item is ObjectiveDataAssessment => item !== undefined,
   );
 
   function openInput(type: "checkup" | "inbody") {
@@ -309,16 +330,24 @@ function AssessmentResult({
       <section className="result-hero-new">
         <div>
           <div className="assessment-kicker">YOUR HEALTH ASSET RESULT</div>
-          <h1>지금의 건강자산은<br /><em>{result.totalScore}점</em>입니다.</h1>
+          <h1>지금의 건강자산은<br /><em>{displayResult.totalScore}점</em>입니다.</h1>
           <p>점수보다 중요한 것은 앞으로의 변화입니다. 우선순위가 높은 세 영역부터 작은 행동을 시작해보세요.</p>
           <div className="result-source-scores">
             <span>건강체크 <b>{result.symptomScore}</b></span>
             <span>생활습관 <b>{result.lifestyleScore}</b></span>
+            {checkupAssessment?.sourceScore !== null &&
+              checkupAssessment?.sourceScore !== undefined && (
+                <span>검진 기준 환산 <b>{checkupAssessment.sourceScore}</b></span>
+              )}
+            {bodyAssessment?.sourceScore !== null &&
+              bodyAssessment?.sourceScore !== undefined && (
+                <span>BMI 기준 환산 <b>{bodyAssessment.sourceScore}</b></span>
+              )}
             <span>완료율 <b>{result.completionRate}%</b></span>
           </div>
         </div>
-        <div className="result-main-ring" style={{ "--score": `${result.totalScore}%` } as React.CSSProperties}>
-          <div><strong>{result.totalScore}</strong><span>건강자산</span></div>
+        <div className="result-main-ring" style={{ "--score": `${displayResult.totalScore}%` } as React.CSSProperties}>
+          <div><strong>{displayResult.totalScore}</strong><span>건강자산</span></div>
         </div>
       </section>
 
@@ -328,9 +357,50 @@ function AssessmentResult({
           <strong>{enhancedConfidence}%</strong>
           <i><b style={{ width: `${enhancedConfidence}%` }} /></i>
         </div>
-        <p><b>{enhancedConfidence === 100 ? "문진과 객관적 자료가 모두 입력됐어요." : "현재 문진 데이터는 충분히 입력됐어요."}</b> 건강검진을 추가하면 +20%, 인바디를 추가하면 +15%만큼 분석 근거가 보완됩니다.</p>
+        <p><b>{enhancedConfidence === 100 ? "문진과 객관적 자료가 모두 입력됐어요." : "현재 문진 데이터는 충분히 입력됐어요."}</b> 유효한 건강검진 수치는 +20%, BMI는 +15%만큼 분석 근거가 보완됩니다.</p>
         <button onClick={() => setShowMethod(!showMethod)}>{showMethod ? "계산 방식 닫기" : "계산 방식 보기"}</button>
       </section>
+      {objectiveAssessments.length > 0 && (
+        <section className="clinical-reference-panel">
+          <div className="clinical-reference-head">
+            <div>
+              <span>GUIDELINE-INFORMED INTERPRETATION</span>
+              <h2>검진 수치 기준 해석</h2>
+            </div>
+            <b>진단 아님</b>
+          </div>
+          <p className="clinical-reference-notice">
+            공식 진료지침의 경계값으로 범위를 분류했습니다. 한 번의 수치만으로
+            질병을 확정하지 않으며, WELLSET 점수 환산은 코칭 우선순위를 위한
+            내부 규칙입니다.
+          </p>
+          <div className="clinical-metric-grid">
+            {objectiveAssessments.flatMap((assessment) =>
+              assessment.metrics.map((item) => (
+                <article key={`${assessment.kind}-${item.id}`}>
+                  <div>
+                    <h3>{item.label}</h3>
+                    <strong>{item.value}</strong>
+                  </div>
+                  <span className={`clinical-band ${item.band}`}>
+                    {item.bandLabel}
+                  </span>
+                  <p>{item.interpretation}</p>
+                </article>
+              )),
+            )}
+          </div>
+          {objectiveAssessments.flatMap((item) => item.excludedMetrics).map((notice) => (
+            <p className="clinical-exclusion" key={notice}>※ {notice}</p>
+          ))}
+          <div className="clinical-source-links">
+            <a href="https://www.e-dmj.org/upload/pdf/dmj-2024-0249.pdf" target="_blank" rel="noreferrer">대한당뇨병학회</a>
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9930285/" target="_blank" rel="noreferrer">대한고혈압학회</a>
+            <a href="https://www.lipid.or.kr/dtp/diagnosis.php" target="_blank" rel="noreferrer">한국지질·동맥경화학회</a>
+            <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10088549/" target="_blank" rel="noreferrer">대한비만학회</a>
+          </div>
+        </section>
+      )}
       <section className="objective-entry-panel">
         <div className="objective-entry-head">
           <div>
@@ -397,14 +467,14 @@ function AssessmentResult({
           <div><b>생활습관</b><span>30%</span><i className="filled" /></div>
           <div><b>건강검진</b><span>20%</span><i className={checkupSaved ? "filled" : ""} /></div>
           <div><b>인바디</b><span>15%</span><i className={inbodySaved ? "filled" : ""} /></div>
-          <p>없는 자료는 0점 처리하지 않고, 현재 입력된 자료의 가중치를 다시 합산해 점수를 계산합니다. 점수 버전: {result.scoreVersion}</p>
+          <p>없는 자료는 0점 처리하지 않고, 현재 입력된 자료의 가중치를 다시 합산합니다. 임상 경계값과 0–100점 환산은 서로 다른 규칙입니다. 점수 버전: {displayResult.scoreVersion}</p>
         </section>
       )}
 
       <section className="priority-result">
         <div className="result-section-head"><div><span>TOP PRIORITIES</span><h2>먼저 돌볼 건강자산 3가지</h2></div><p>낮은 점수는 질병을 의미하지 않으며, 생활 관리의 우선순위를 찾기 위한 참고 정보입니다.</p></div>
         <div className="priority-card-grid">
-          {result.priorities.map((domain, index) => (
+          {displayResult.priorities.map((domain, index) => (
             <article key={domain.code}>
               <span>PRIORITY {index + 1}</span>
               <strong>{domain.score}</strong>
@@ -419,7 +489,7 @@ function AssessmentResult({
       <section className="domain-result-section">
         <div className="result-section-head"><div><span>12 HEALTH ASSETS</span><h2>12대 건강자산 상세</h2></div><p>차트와 함께 영역명·점수·상태를 텍스트로 제공합니다.</p></div>
         <div className="domain-score-list">
-          {result.domains.map((domain) => (
+          {displayResult.domains.map((domain) => (
             <article key={domain.code}>
               <div><h3>{domain.name}</h3><p>{domain.description}</p></div>
               <i><b style={{ width: `${domain.score}%` }} /></i>
@@ -477,8 +547,11 @@ function ObjectiveDataForm({
 }) {
   const fields = type === "checkup" ? CHECKUP_FIELDS : INBODY_FIELDS;
   const title = type === "checkup" ? "건강검진 수치 입력" : "인바디 수치 입력";
-  const [values, setValues] =
-    useState<Record<string, string>>(initialValues);
+  const [values, setValues] = useState<Record<string, string>>(
+    type === "checkup" && !initialValues.bpContext
+      ? { ...initialValues, bpContext: "office" }
+      : initialValues,
+  );
 
   return (
     <form
@@ -505,6 +578,21 @@ function ObjectiveDataForm({
           </div>
           <em>수치 확인 단계</em>
         </div>
+      )}
+      {type === "checkup" && (
+        <label className="objective-context-field">
+          <span>혈압 측정 환경</span>
+          <select
+            value={values.bpContext ?? "office"}
+            onChange={(event) =>
+              setValues({ ...values, bpContext: event.target.value })
+            }
+          >
+            <option value="office">의료기관(진료실) 측정</option>
+            <option value="home">가정에서 측정한 평균</option>
+          </select>
+          <small>고혈압 확인 기준은 진료실 140/90, 가정 평균 135/85 mmHg로 다릅니다.</small>
+        </label>
       )}
       <div className="objective-field-grid">
         {fields.map((field) => (
@@ -535,7 +623,7 @@ function ObjectiveDataForm({
       </div>
       <div className="objective-form-actions">
         <button type="button" onClick={onCancel}>취소</button>
-        <button type="submit">입력 완료 · 신뢰도 반영</button>
+        <button type="submit">입력 완료 · 점수와 신뢰도 반영</button>
       </div>
     </form>
   );

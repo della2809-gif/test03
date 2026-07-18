@@ -1,0 +1,99 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  applyObjectiveData,
+  assessBmi,
+  assessBloodPressure,
+  assessBodyCompositionData,
+  assessCheckupData,
+  assessFastingGlucose,
+  assessHba1c,
+  assessLdl,
+  assessTriglycerides,
+} from "../features/clinical-rules/index.ts";
+import { ASSESSMENT_QUESTIONS } from "../features/health-assessment/questions.ts";
+import { calculateAssessmentResult } from "../features/health-assessment/scoring.ts";
+
+test("공복혈당과 HbA1c 경계값은 대한당뇨병학회 범위를 따른다", () => {
+  assert.equal(assessFastingGlucose(99).band, "reference");
+  assert.equal(assessFastingGlucose(100).band, "attention");
+  assert.equal(assessFastingGlucose(126).band, "medical-review");
+  assert.equal(assessHba1c(5.6).band, "reference");
+  assert.equal(assessHba1c(5.7).band, "attention");
+  assert.equal(assessHba1c(6.5).band, "medical-review");
+});
+
+test("혈압은 진료실과 가정 평균의 서로 다른 확인 기준을 적용한다", () => {
+  assert.equal(assessBloodPressure(139, 89, "office").band, "attention");
+  assert.equal(assessBloodPressure(140, 80, "office").band, "medical-review");
+  assert.equal(assessBloodPressure(134, 84, "home").band, "attention");
+  assert.equal(assessBloodPressure(135, 80, "home").band, "medical-review");
+});
+
+test("LDL과 중성지방은 학회 분류 경계값을 보존한다", () => {
+  assert.equal(assessLdl(99).wellnessScore, 100);
+  assert.equal(assessLdl(130).band, "attention");
+  assert.equal(assessLdl(160).band, "medical-review");
+  assert.equal(assessTriglycerides(149).band, "reference");
+  assert.equal(assessTriglycerides(150).band, "attention");
+  assert.equal(assessTriglycerides(500).band, "medical-review");
+});
+
+test("한국 성인 BMI 분류 경계값을 적용한다", () => {
+  assert.equal(assessBmi(18.4).interpretation, "저체중 범위입니다.");
+  assert.equal(assessBmi(18.5).band, "reference");
+  assert.equal(assessBmi(23).interpretation, "비만 전단계 범위입니다.");
+  assert.equal(assessBmi(25).interpretation, "1단계 비만 범위입니다.");
+  assert.equal(assessBmi(30).interpretation, "2단계 비만 범위입니다.");
+  assert.equal(assessBmi(35).interpretation, "3단계 비만 범위입니다.");
+});
+
+test("근거가 개인별인 ALT와 장비별 인바디 지표는 점수에서 제외한다", () => {
+  const checkup = assessCheckupData({
+    alt: "80",
+    fastingGlucose: "95",
+  });
+  const body = assessBodyCompositionData({
+    bmi: "22",
+    bodyFat: "35",
+    skeletalMuscle: "20",
+    visceralFat: "12",
+  });
+  assert.equal(checkup.metrics.some((item) => item.id === "alt"), false);
+  assert.equal(body.metrics.length, 1);
+  assert.match(checkup.excludedMetrics[0], /ALT/);
+  assert.match(body.excludedMetrics[0], /측정 장비/);
+});
+
+test("객관적 수치는 신뢰도뿐 아니라 총점과 관련 건강축 점수도 갱신한다", () => {
+  const answers = Object.fromEntries(
+    ASSESSMENT_QUESTIONS.map((question) => [question.id, 1]),
+  );
+  const base = calculateAssessmentResult(
+    answers,
+    "2026-07-18T00:00:00.000Z",
+  );
+  const checkup = assessCheckupData({
+    bpContext: "office",
+    systolic: "150",
+    diastolic: "95",
+    fastingGlucose: "130",
+    hba1c: "6.7",
+    ldl: "170",
+    hdl: "35",
+    triglycerides: "220",
+    alt: "30",
+  });
+  const body = assessBodyCompositionData({ bmi: "31" });
+  const enhanced = applyObjectiveData(base, {
+    checkup,
+    bodyComposition: body,
+  });
+  assert.equal(enhanced.dataConfidence, 100);
+  assert.notEqual(enhanced.totalScore, base.totalScore);
+  assert.ok(
+    enhanced.domains.find((item) => item.code === "metabolic")!.score <
+      base.domains.find((item) => item.code === "metabolic")!.score,
+  );
+  assert.equal(enhanced.scoreVersion, "wellset-score-v2-guideline-informed");
+});
