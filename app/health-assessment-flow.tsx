@@ -16,6 +16,8 @@ import {
   assessCheckupData,
   type ObjectiveDataAssessment,
 } from "../features/clinical-rules/index.ts";
+import { localizeQuestion } from "../features/health-assessment/i18n.ts";
+import { useI18n } from "./i18n-provider";
 
 const STORAGE_KEY = "wellset-health-assessment-v1";
 
@@ -28,6 +30,7 @@ export function HealthAssessmentFlow({
   onComplete: (result: HealthAssessmentResult) => void;
   goPassport: () => void;
 }) {
+  const { locale } = useI18n();
   const [answers, setAnswers] = useState<AssessmentAnswers>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -55,11 +58,13 @@ export function HealthAssessmentFlow({
   const [result, setResult] = useState<HealthAssessmentResult | null>(null);
 
   const current = ASSESSMENT_QUESTIONS[index];
+  const localizedCurrent = current ? localizeQuestion(current, locale) : current;
   const answeredCount = Object.keys(answers).filter((id) =>
     ASSESSMENT_QUESTIONS.some((question) => question.id === id),
   ).length;
-  const sectionLabel =
-    current?.section === "health-check" ? "건강체크" : "생활습관 진단";
+  const sectionLabel = locale === "en"
+    ? current?.section === "health-check" ? "Health Check" : "Lifestyle"
+    : current?.section === "health-check" ? "건강체크" : "생활습관 진단";
   const sectionNumber =
     current?.section === "health-check"
       ? index + 1
@@ -131,18 +136,18 @@ export function HealthAssessmentFlow({
     return (
       <main className="assessment-page assessment-intro">
         <div className="assessment-kicker">WELLSET HEALTH ASSESSMENT</div>
-        <h1>나의 건강자산을<br />두 단계로 확인해보세요.</h1>
-        <p>최근 몸의 신호와 생활습관을 함께 살펴 12대 건강자산과 오늘의 우선 행동을 안내합니다.</p>
+        <h1>{locale === "en" ? <>Discover your health assets<br />in two simple steps.</> : <>나의 건강자산을<br />두 단계로 확인해보세요.</>}</h1>
+        <p>{locale === "en" ? "Review recent body signals and lifestyle habits to identify 12 health assets and your next priority action." : "최근 몸의 신호와 생활습관을 함께 살펴 12대 건강자산과 오늘의 우선 행동을 안내합니다."}</p>
         <div className="assessment-stage-grid">
           <article>
-            <b>1</b><span>STEP 1</span><h2>건강체크</h2>
-            <p>최근 2주 동안 느낀 몸의 신호를 확인합니다.</p>
-            <strong>{HEALTH_CHECK_QUESTIONS.length}문항 · 약 3분</strong>
+            <b>1</b><span>STEP 1</span><h2>{locale === "en" ? "Health Check" : "건강체크"}</h2>
+            <p>{locale === "en" ? "Review body signals from the past two weeks." : "최근 2주 동안 느낀 몸의 신호를 확인합니다."}</p>
+            <strong>{HEALTH_CHECK_QUESTIONS.length} {locale === "en" ? "questions · about 3 min" : "문항 · 약 3분"}</strong>
           </article>
           <article>
-            <b>2</b><span>STEP 2</span><h2>생활습관 진단</h2>
-            <p>식사, 수분, 운동, 수면과 관리 습관을 확인합니다.</p>
-            <strong>{LIFESTYLE_QUESTIONS.length}문항 · 약 2분</strong>
+            <b>2</b><span>STEP 2</span><h2>{locale === "en" ? "Lifestyle" : "생활습관 진단"}</h2>
+            <p>{locale === "en" ? "Review nutrition, hydration, activity, sleep and self-care." : "식사, 수분, 운동, 수면과 관리 습관을 확인합니다."}</p>
+            <strong>{LIFESTYLE_QUESTIONS.length} {locale === "en" ? "questions · about 2 min" : "문항 · 약 2분"}</strong>
           </article>
         </div>
         <div className="assessment-output">
@@ -150,7 +155,7 @@ export function HealthAssessmentFlow({
           <div><b>건강자산 총점</b><b>12대 영역 점수</b><b>데이터 신뢰도</b><b>우선 행동 3개</b></div>
         </div>
         <button className="assessment-primary" onClick={start}>
-          {answeredCount > 0 ? `이어서 진단하기 · ${progress}%` : "건강진단 시작하기"} <span>→</span>
+          {answeredCount > 0 ? (locale === "en" ? `Continue · ${progress}%` : `이어서 진단하기 · ${progress}%`) : (locale === "en" ? "Start assessment" : "건강진단 시작하기")} <span>→</span>
         </button>
         <p className="assessment-disclaimer">WELLSET 건강자산 점수는 생활 관리를 위한 웰니스 지표이며 의료 진단이나 치료 효과를 의미하지 않습니다.</p>
       </main>
@@ -207,10 +212,10 @@ export function HealthAssessmentFlow({
       </div>
       <section className="assessment-question-card">
         <div className="question-domain">{sectionLabel}</div>
-        <h1>{current.prompt}</h1>
-        <p>{current.helper}</p>
+        <h1>{localizedCurrent.prompt}</h1>
+        <p>{localizedCurrent.helper}</p>
         <div className="assessment-options">
-          {current.options.map((option) => (
+          {localizedCurrent.options.map((option) => (
             <button
               key={option.label}
               className={answers[current.id] === option.value ? "selected" : ""}
@@ -223,7 +228,7 @@ export function HealthAssessmentFlow({
           ))}
         </div>
       </section>
-      <p className="assessment-help">정답은 없습니다. 최근 2주의 평균적인 상태에 가장 가까운 답을 골라주세요.</p>
+      <p className="assessment-help">{locale === "en" ? "There are no right answers. Choose what best reflects your average over the past two weeks." : "정답은 없습니다. 최근 2주의 평균적인 상태에 가장 가까운 답을 골라주세요."}</p>
     </main>
   );
 }

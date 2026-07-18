@@ -50,10 +50,10 @@ function periodKey(date: Date, period: HealthLedgerPeriod) {
   return toDateKey(startOfWeek(date));
 }
 
-function periodLabel(key: string, period: HealthLedgerPeriod) {
+function periodLabel(key: string, period: HealthLedgerPeriod, locale: "ko" | "en") {
   if (period === "month") {
     const [year, month] = key.split("-");
-    return `${year}년 ${Number(month)}월`;
+    return locale === "en" ? `${year}-${month}` : `${year}년 ${Number(month)}월`;
   }
   const start = parseDate(key);
   const end = new Date(start);
@@ -64,6 +64,7 @@ function periodLabel(key: string, period: HealthLedgerPeriod) {
 export function aggregateHealthLedger(
   entries: readonly HealthLedgerEntry[],
   period: HealthLedgerPeriod,
+  locale: "ko" | "en" = "ko",
 ): HealthLedgerSummary[] {
   const grouped = new Map<string, HealthLedgerEntry[]>();
 
@@ -80,7 +81,7 @@ export function aggregateHealthLedger(
         .filter((score): score is number => score !== undefined);
       return {
         key,
-        label: periodLabel(key, period),
+        label: periodLabel(key, period, locale),
         points: rows.reduce((sum, row) => sum + row.points, 0),
         completedMissions: rows.reduce(
           (sum, row) => sum + row.completedMissions,
@@ -100,6 +101,7 @@ export function aggregateHealthLedger(
 export function aggregateHealthMeasurements(
   entries: readonly HealthMeasurementEntry[],
   period: HealthLedgerPeriod,
+  locale: "ko" | "en" = "ko",
 ): HealthMeasurementSummary[] {
   const grouped = new Map<string, HealthMeasurementEntry[]>();
 
@@ -114,7 +116,7 @@ export function aggregateHealthMeasurements(
       const latest = [...rows].sort((a, b) => b.date.localeCompare(a.date))[0];
       return {
         key,
-        label: periodLabel(key, period),
+        label: periodLabel(key, period, locale),
         measuredAt: latest.date,
         weight: latest.weight ?? null,
         skeletalMuscle: latest.skeletalMuscle ?? null,

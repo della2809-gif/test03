@@ -10,7 +10,7 @@
     "build": "vinext build",
     "build:pages": "next build",
     "start": "vinext start",
-    "test": "node --test tests/scoring.test.ts tests/health-assessment.test.ts tests/clinical-rules.test.ts tests/health-account.test.ts",
+    "test": "node --test tests/scoring.test.ts tests/health-assessment.test.ts tests/clinical-rules.test.ts tests/health-account.test.ts tests/i18n.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
