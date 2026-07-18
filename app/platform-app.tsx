@@ -6,8 +6,10 @@ import { HealthAssessmentFlow } from "./health-assessment-flow";
 import { HealthCoachingApp } from "./health-coaching-app";
 import {
   aggregateHealthLedger,
+  aggregateHealthMeasurements,
   type HealthLedgerEntry,
   type HealthLedgerPeriod,
+  type HealthMeasurementEntry,
 } from "../features/health-account/aggregation.ts";
 
 type ConsumerView = "home" | "check" | "passport" | "missions" | "community";
@@ -34,12 +36,24 @@ const healthLedger: HealthLedgerEntry[] = [
   { date: "2026-06-18", points: 130, completedMissions: 7, exerciseMinutes: 126, assetScore: 69 },
   { date: "2026-06-26", points: 150, completedMissions: 8, exerciseMinutes: 135, assetScore: 70 },
   { date: "2026-07-02", points: 90, completedMissions: 5, exerciseMinutes: 92, assetScore: 71 },
-  { date: "2026-07-07", points: 120, completedMissions: 6, exerciseMinutes: 116, assetScore: 72 },
-  { date: "2026-07-12", points: 100, completedMissions: 5, exerciseMinutes: 98, assetScore: 73 },
+  { date: "2026-07-07", points: 120, completedMissions: 6, exerciseMinutes: 55, assetScore: 72 },
+  { date: "2026-07-12", points: 100, completedMissions: 5, exerciseMinutes: 55, assetScore: 73 },
   { date: "2026-07-14", points: 70, completedMissions: 3, exerciseMinutes: 54, assetScore: 73 },
   { date: "2026-07-16", points: 100, completedMissions: 4, exerciseMinutes: 48, assetScore: 74 },
   { date: "2026-07-18", points: 130, completedMissions: 5, exerciseMinutes: 40, assetScore: 75 },
 ];
+
+const healthMeasurements: HealthMeasurementEntry[] = [
+  { date: "2026-03-28", weight: 63.5, skeletalMuscle: 22.7, systolic: 126, diastolic: 82 },
+  { date: "2026-04-25", weight: 63.1, skeletalMuscle: 22.9, systolic: 124, diastolic: 80 },
+  { date: "2026-05-30", weight: 62.8, skeletalMuscle: 23.0, systolic: 122, diastolic: 79 },
+  { date: "2026-06-27", weight: 62.5, skeletalMuscle: 23.0, systolic: 121, diastolic: 78 },
+  { date: "2026-07-05", weight: 62.2, skeletalMuscle: 23.1, systolic: 120, diastolic: 78 },
+  { date: "2026-07-12", weight: 62.0, skeletalMuscle: 23.2, systolic: 119, diastolic: 77 },
+  { date: "2026-07-18", weight: 61.8, skeletalMuscle: 23.4, systolic: 118, diastolic: 76 },
+];
+
+type HealthMetric = "weight" | "skeletalMuscle" | "bloodPressure" | "exercise";
 
 export function PlatformApp() {
   const [coachMode, setCoachMode] = useState(false);
@@ -187,18 +201,86 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
 
 function Passport({ score, goCheck, goMission }: { score: number; goCheck: () => void; goMission: () => void }) {
   const [period, setPeriod] = useState<HealthLedgerPeriod>("week");
+  const [selectedMetric, setSelectedMetric] = useState<HealthMetric>("weight");
   const summaries = aggregateHealthLedger(healthLedger, period);
+  const measurements = aggregateHealthMeasurements(healthMeasurements, period);
   const current = summaries[0];
   const maxPoints = Math.max(...summaries.map((item) => item.points), 1);
+  const latestMeasurement = measurements[0];
+  const metricSeries = summaries
+    .map((summary) => {
+      const measurement = measurements.find((item) => item.key === summary.key);
+      const numericValue =
+        selectedMetric === "weight"
+          ? measurement?.weight
+          : selectedMetric === "skeletalMuscle"
+            ? measurement?.skeletalMuscle
+            : selectedMetric === "bloodPressure"
+              ? measurement?.systolic
+              : summary.exerciseMinutes;
+      const displayValue =
+        selectedMetric === "bloodPressure"
+          ? `${measurement?.systolic ?? "-"}/${measurement?.diastolic ?? "-"}`
+          : numericValue?.toString() ?? "-";
+      return { ...summary, numericValue, displayValue, measurement };
+    })
+    .filter((item) => item.numericValue !== null && item.numericValue !== undefined);
+  const metricValues = metricSeries.map((item) => item.numericValue as number);
+  const metricMin = Math.min(...metricValues);
+  const metricMax = Math.max(...metricValues);
+  const metricRange = Math.max(metricMax - metricMin, 1);
+  const metricInfo: Record<HealthMetric, { label: string; unit: string; note: string }> = {
+    weight: { label: "체중", unit: "kg", note: "기간별 마지막 측정값" },
+    skeletalMuscle: { label: "골격근량", unit: "kg", note: "기간별 마지막 인바디 측정값" },
+    bloodPressure: { label: "혈압", unit: "mmHg", note: "기간별 마지막 측정값" },
+    exercise: { label: "운동", unit: "분", note: "기간 내 운동시간 합계" },
+  };
+  const previousMeasurement = measurements[1];
+  const weightChange = latestMeasurement.weight !== null && previousMeasurement?.weight !== null
+    ? latestMeasurement.weight - previousMeasurement.weight
+    : null;
+  const muscleChange = latestMeasurement.skeletalMuscle !== null && previousMeasurement?.skeletalMuscle !== null
+    ? latestMeasurement.skeletalMuscle - previousMeasurement.skeletalMuscle
+    : null;
+  const exerciseChange = summaries[1]
+    ? current.exerciseMinutes - summaries[1].exerciseMinutes
+    : null;
+  const formatSigned = (value: number | null, digits = 0) =>
+    value === null ? "-" : `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
+  const metricCards: Array<{ id: HealthMetric; label: string; value: string; unit: string; change: string }> = [
+    { id: "weight", label: "체중", value: latestMeasurement.weight?.toFixed(1) ?? "-", unit: "kg", change: formatSigned(weightChange, 1) },
+    { id: "skeletalMuscle", label: "골격근량", value: latestMeasurement.skeletalMuscle?.toFixed(1) ?? "-", unit: "kg", change: formatSigned(muscleChange, 1) },
+    { id: "bloodPressure", label: "혈압", value: `${latestMeasurement.systolic ?? "-"}/${latestMeasurement.diastolic ?? "-"}`, unit: "mmHg", change: "안정" },
+    { id: "exercise", label: period === "week" ? "주간 운동" : "월간 운동", value: current.exerciseMinutes.toString(), unit: "분", change: formatSigned(exerciseChange) },
+  ];
 
   return <main className="inner-page passport-page">
     <div className="inner-head"><div><div className="asset-eyebrow">MY HEALTH ACCOUNT</div><h1>김서연님의 건강통장</h1><p>작은 변화도 빠짐없이 건강자산으로 기록하고 있어요.</p></div><button className="asset-ghost" onClick={goCheck}>건강체크 다시 하기</button></div>
     <div className="passport-dashboard">
       <section className="passport-score"><span>2026년 7월 건강자산</span><strong>{score}</strong><b>지난달보다 +4</b><div className="spark">{[30, 35, 42, 39, 52, 57, 68, 74].map((height, i) => <i key={i} style={{ height: `${height}%` }} />)}</div></section>
       <section className="passport-records">
-        {[["체중", "61.8", "kg", "-0.7"], ["골격근량", "23.4", "kg", "+0.4"], ["혈압", "118/76", "mmHg", "안정"], ["주간 운동", "142", "분", "+32"]].map(([label, value, unit, change]) => <div key={label}><span>{label}</span><strong>{value}<small>{unit}</small></strong><b>{change}</b></div>)}
+        {metricCards.map((item) => <button type="button" className={selectedMetric === item.id ? "active" : ""} onClick={() => setSelectedMetric(item.id)} key={item.id}><span>{item.label}</span><strong>{item.value}<small>{item.unit}</small></strong><b>{item.change}</b><em>추이 보기 →</em></button>)}
       </section>
     </div>
+    <section className="health-metric-history">
+      <div className="health-metric-head">
+        <div><span>HEALTH METRIC HISTORY</span><h2>{metricInfo[selectedMetric].label} 누적 추이</h2><p>{metricInfo[selectedMetric].note}을 기준으로 표시합니다.</p></div>
+        <div className="account-period-tabs" role="group" aria-label="건강수치 조회 기간">
+          <button className={period === "week" ? "active" : ""} onClick={() => setPeriod("week")}>주간</button>
+          <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>월간</button>
+        </div>
+      </div>
+      <div className="health-metric-chart">
+        {metricSeries.slice(0, 6).reverse().map((item) => (
+          <div key={item.key}>
+            <strong>{item.displayValue}<small>{metricInfo[selectedMetric].unit}</small></strong>
+            <span><i style={{ height: `${28 + (((item.numericValue as number) - metricMin) / metricRange) * 72}%` }} /></span>
+            <b>{item.label}</b>
+          </div>
+        ))}
+      </div>
+      <p className="health-metric-footnote">체중·골격근량·혈압은 합산하지 않고 변화 추이를 보여주며, 운동시간만 기간별로 누적합니다.</p>
+    </section>
     <section className="account-accumulation">
       <div className="account-period-head">
         <div><span>ACCUMULATED REPORT</span><h2>주·월 누적 건강자산</h2><p>기록된 행동과 측정 결과를 기간별로 합산했어요.</p></div>
