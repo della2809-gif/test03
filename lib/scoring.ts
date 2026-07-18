@@ -125,7 +125,7 @@ export function getScoreStatus(score: number) {
   if (value >= 80) return "안정적으로 관리 중";
   if (value >= 60) return "관심 필요";
   if (value >= 40) return "집중관리 권장";
-  return "전문가 확인 고려";
+  return "건강멘토상담필요";
 }
 
 export const calculateAxisAsset = (concern: number) =>

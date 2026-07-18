@@ -27,7 +27,7 @@ test("점수 구간은 의료 진단 용어 없이 설명한다",()=>{
   assert.equal(getScoreStatus(85),"안정적으로 관리 중");
   assert.equal(getScoreStatus(65),"관심 필요");
   assert.equal(getScoreStatus(45),"집중관리 권장");
-  assert.equal(getScoreStatus(20),"전문가 확인 고려");
+  assert.equal(getScoreStatus(20),"건강멘토상담필요");
 });
 test("오늘의 STACK은 완료한 행동 이벤트의 합으로 계산한다",()=>{
   const result=calculateDailyStack({sleepGoal:true,hydrationGoal:true,conditionLogged:true});
