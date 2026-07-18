@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import type { HealthAssessmentResult } from "../features/health-assessment/types.ts";
+import { HealthAssessmentFlow } from "./health-assessment-flow";
 import { HealthCoachingApp } from "./health-coaching-app";
 
 type ConsumerView = "home" | "check" | "passport" | "missions" | "community";
@@ -14,46 +16,6 @@ const journey = [
   ["06", "VIP 대면 코칭", "인바디 측정과 설계"],
   ["07", "함께 관리", "친구·커뮤니티와 지속"],
 ];
-
-const questions = [
-  {
-    axis: "혈당 리듬",
-    icon: "↗",
-    question: "식사 후 졸리거나 단 음식이 자주 당기나요?",
-    help: "최근 2주를 떠올려 답해주세요.",
-  },
-  {
-    axis: "피로 회복",
-    icon: "☀",
-    question: "충분히 쉬어도 피로가 남아 있나요?",
-    help: "오전의 에너지 상태를 기준으로 생각해보세요.",
-  },
-  {
-    axis: "수면",
-    icon: "☾",
-    question: "잠들기 어렵거나 자주 깨나요?",
-    help: "주 3회 이상 경험한다면 ‘자주’를 선택해주세요.",
-  },
-  {
-    axis: "장 건강",
-    icon: "◎",
-    question: "더부룩함이나 배변 불편이 있나요?",
-    help: "식후 불편감과 배변 리듬을 함께 봅니다.",
-  },
-  {
-    axis: "체성분",
-    icon: "◇",
-    question: "근육은 줄고 체지방은 늘었다고 느끼나요?",
-    help: "정확한 평가는 대면 인바디 측정으로 보완할 수 있어요.",
-  },
-];
-
-const choices = [
-  ["거의 없음", 0],
-  ["가끔", 1],
-  ["자주", 2],
-  ["매우 자주", 3],
-] as const;
 
 const missionsSeed = [
   { id: 1, title: "식후 10분 가볍게 걷기", meta: "혈당 리듬 · 10분", point: 30 },
@@ -78,30 +40,16 @@ export function PlatformApp() {
 
 function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
   const [view, setView] = useState<ConsumerView>("home");
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
-  const [checkDone, setCheckDone] = useState(false);
+  const [assessmentResult, setAssessmentResult] =
+    useState<HealthAssessmentResult | null>(null);
   const [missions, setMissions] = useState<number[]>([2]);
   const [toast, setToast] = useState("");
 
-  const risk = useMemo(() => answers.reduce((sum, value) => sum + value, 0), [answers]);
-  const score = Math.max(54, 92 - risk * 3);
   const points = 240 + missions.reduce((sum, id) => sum + (missionsSeed.find((item) => item.id === id)?.point ?? 0), 0);
 
   function navigate(next: ConsumerView) {
     setView(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function answer(value: number) {
-    const next = [...answers];
-    next[questionIndex] = value;
-    setAnswers(next);
-    if (questionIndex === questions.length - 1) {
-      setCheckDone(true);
-    } else {
-      setQuestionIndex(questionIndex + 1);
-    }
   }
 
   function showToast(message: string) {
@@ -126,17 +74,12 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
 
       {view === "home" && <Home navigate={navigate} openCoach={openCoach} />}
       {view === "check" && (
-        <HealthCheck
-          index={questionIndex}
-          answers={answers}
-          done={checkDone}
-          score={score}
-          answer={answer}
-          restart={() => { setAnswers([]); setQuestionIndex(0); setCheckDone(false); }}
+        <HealthAssessmentFlow
+          onComplete={setAssessmentResult}
           goPassport={() => navigate("passport")}
         />
       )}
-      {view === "passport" && <Passport score={checkDone ? score : 74} goCheck={() => navigate("check")} goMission={() => navigate("missions")} />}
+      {view === "passport" && <Passport score={assessmentResult?.totalScore ?? 74} goCheck={() => navigate("check")} goMission={() => navigate("missions")} />}
       {view === "missions" && <Missions missions={missions} setMissions={setMissions} points={points} showToast={showToast} />}
       {view === "community" && <Community showToast={showToast} />}
 
@@ -222,46 +165,6 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
       <section className="asset-final-cta"><span>MY HEALTH, MY ASSET</span><h2>오늘의 5분이<br />내일의 건강자산이 됩니다.</h2><button className="asset-solid light-solid" onClick={() => navigate("check")}>무료 건강체크 시작하기 →</button><button className="operator-link" onClick={openCoach}>코치이신가요? 운영 화면 보기</button></section>
     </main>
   );
-}
-
-function HealthCheck({ index, answers, done, score, answer, restart, goPassport }: {
-  index: number; answers: number[]; done: boolean; score: number;
-  answer: (value: number) => void; restart: () => void; goPassport: () => void;
-}) {
-  if (done) {
-    const focusIndex = answers.indexOf(Math.max(...answers));
-    const focus = questions[Math.max(0, focusIndex)].axis;
-    return <main className="check-page result-page">
-      <div className="result-label">AI 건강체크 결과</div>
-      <h1>지금 가장 먼저 돌볼 자산은<br /><em>{focus}</em>이에요.</h1>
-      <div className="result-layout">
-        <section className="result-score-card"><span>나의 건강자산 점수</span><div className="result-ring" style={{ "--result": `${score}%` } as React.CSSProperties}><strong>{score}</strong></div><b>관리 시작하기 좋은 상태</b><p>이 점수는 생활 습관 응답을 바탕으로 한 참고 지표이며 의료 진단 결과가 아닙니다.</p></section>
-        <section className="result-priorities">
-          <div className="result-insight"><span>AI 핵심 인사이트</span><h2>{focus}을 먼저 관리하면<br />전체 컨디션 개선에 도움이 돼요.</h2><p>무리한 목표보다 7일 동안 한 가지 행동을 반복해보세요.</p></div>
-          <div className="first-plan"><b>첫 번째 7일 플랜</b><span>저녁 식사 후 10분 걷기</span><small>매일 완료하면 총 210P</small></div>
-          <button className="asset-solid" onClick={goPassport}>내 건강여권에 결과 저장 →</button>
-        </section>
-      </div>
-      <div className="result-next"><div><b>더 정확히 알고 싶다면</b><p>대면 VIP 코칭에서 인바디 측정과 심층 인터뷰로 결과의 신뢰도를 높일 수 있어요.</p></div><button onClick={() => alert("상담 신청이 접수되었습니다. 데모 화면입니다.")}>VIP 코칭 알아보기</button></div>
-      <button className="restart-link" onClick={restart}>처음부터 다시 체크하기</button>
-    </main>;
-  }
-
-  const item = questions[index];
-  return <main className="check-page">
-    <div className="check-intro"><div className="asset-eyebrow">FREE AI HEALTH CHECK</div><h1>지금 나에게 필요한<br />건강관리를 찾아볼게요.</h1><p>최근 2주의 상태를 기준으로 편하게 답해주세요.</p></div>
-    <div className="check-progress"><span style={{ width: `${((index + 1) / questions.length) * 100}%` }} /></div>
-    <div className="check-meta"><b>{String(index + 1).padStart(2, "0")}</b><span>/ {String(questions.length).padStart(2, "0")}</span><em>{item.axis}</em></div>
-    <section className="question-card">
-      <div className="question-icon">{item.icon}</div>
-      <h2>{item.question}</h2>
-      <p>{item.help}</p>
-      <div className="choice-grid">
-        {choices.map(([label, value]) => <button key={label} onClick={() => answer(value)}><span>{label}</span><i>→</i></button>)}
-      </div>
-    </section>
-    <div className="check-trust"><span>🔒 응답은 결과 분석에만 사용돼요.</span><span>약 1분 남음</span></div>
-  </main>;
 }
 
 function Passport({ score, goCheck, goMission }: { score: number; goCheck: () => void; goMission: () => void }) {

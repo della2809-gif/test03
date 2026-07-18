@@ -1,0 +1,79 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  ASSESSMENT_QUESTIONS,
+  HEALTH_CHECK_QUESTIONS,
+  LIFESTYLE_QUESTIONS,
+} from "../features/health-assessment/questions.ts";
+import {
+  calculateAssessmentResult,
+  isAssessmentComplete,
+} from "../features/health-assessment/scoring.ts";
+import type { AssessmentAnswers } from "../features/health-assessment/types.ts";
+
+const answerAll = (value: number): AssessmentAnswers =>
+  Object.fromEntries(
+    ASSESSMENT_QUESTIONS.map((question) => [question.id, value]),
+  );
+
+test("모든 문항을 답하면 완료 상태가 된다", () => {
+  const answers = answerAll(1);
+  assert.equal(isAssessmentComplete(answers), true);
+  assert.equal(isAssessmentComplete({}), false);
+});
+
+test("건강체크와 생활습관 완료 시 데이터 신뢰도는 65%다", () => {
+  const result = calculateAssessmentResult(
+    answerAll(1),
+    "2026-07-18T00:00:00.000Z",
+  );
+  assert.equal(result.dataConfidence, 65);
+  assert.equal(result.completionRate, 100);
+  assert.equal(result.scoreVersion, "wellset-score-v1");
+});
+
+test("검진과 인바디가 없어도 문진 자료끼리 재정규화한다", () => {
+  const answers: AssessmentAnswers = {
+    ...Object.fromEntries(
+      HEALTH_CHECK_QUESTIONS.map((question) => [question.id, 0]),
+    ),
+    ...Object.fromEntries(
+      LIFESTYLE_QUESTIONS.map((question) => [question.id, 3]),
+    ),
+  };
+  const result = calculateAssessmentResult(answers);
+  assert.equal(result.symptomScore, 100);
+  assert.equal(result.lifestyleScore, 0);
+  assert.equal(result.totalScore, 54);
+});
+
+test("12대 건강자산 점수와 우선관리 3개를 산출한다", () => {
+  const answers = answerAll(0);
+  answers["hc-gut"] = 3;
+  answers["ls-vegetable"] = 3;
+  answers["hc-brain"] = 2;
+  const result = calculateAssessmentResult(answers);
+  assert.equal(result.domains.length, 12);
+  assert.equal(result.priorities.length, 3);
+  assert.equal(result.priorities[0].code, "gut");
+  assert.ok(result.domains.every((domain) => domain.score >= 0 && domain.score <= 100));
+});
+
+test("부분 응답의 데이터 신뢰도는 응답 비율만 반영한다", () => {
+  const halfHealthQuestions = HEALTH_CHECK_QUESTIONS.slice(
+    0,
+    HEALTH_CHECK_QUESTIONS.length / 2,
+  );
+  const result = calculateAssessmentResult(
+    Object.fromEntries(halfHealthQuestions.map((question) => [question.id, 1])),
+  );
+  assert.equal(result.dataConfidence, 18);
+  assert.equal(result.completionRate, 27);
+});
+
+test("같은 응답은 항상 같은 점수 결과를 만든다", () => {
+  const answers = answerAll(2);
+  const first = calculateAssessmentResult(answers, "2026-07-18T00:00:00.000Z");
+  const second = calculateAssessmentResult(answers, "2026-07-18T00:00:00.000Z");
+  assert.deepEqual(first, second);
+});
