@@ -1,13 +1,5 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
-import * as schema from "./schema";
-
 export function getDb() {
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
-  }
-
-  return drizzle(env.DB, { schema });
+  throw new Error(
+    "데이터베이스가 아직 연결되지 않았습니다. 운영 저장 기능을 활성화할 때 Supabase 또는 D1 어댑터를 구성하세요.",
+  );
 }

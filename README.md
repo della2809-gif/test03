@@ -21,3 +21,11 @@ npm run dev
 ```
 
 검증은 `npm test`로 실행합니다. 민감 건강정보를 운영 환경에서 저장하려면 인증, 동의, 접근 로그와 행 단위 접근 제어 정책을 먼저 활성화해야 합니다.
+
+## GitHub Pages 배포
+
+`main` 브랜치에 변경사항을 푸시하면 `.github/workflows/deploy-pages.yml`이 정적 사이트를 빌드해 GitHub Pages로 자동 배포합니다.
+
+배포 주소:
+
+https://della2809-gif.github.io/test03/

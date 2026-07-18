@@ -1,19 +1,15 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const image = `${protocol}://${host}/og.png`;
-  return {
-    title: { default: "건강자산", template: "%s | 건강자산" },
-    description: "나의 몸을 더 깊이 이해하는 프리미엄 건강 코칭",
-    openGraph: { title: "건강자산", description: "프리미엄 건강 코칭", images: [image], locale: "ko_KR", type: "website" },
-    twitter: { card: "summary_large_image", title: "건강자산", description: "프리미엄 건강 코칭", images: [image] },
-  };
-}
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://della2809-gif.github.io/test03";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: { default: "건강자산", template: "%s | 건강자산" },
+  description: "나의 몸을 더 깊이 이해하는 프리미엄 건강 코칭",
+  openGraph: { title: "건강자산", description: "프리미엄 건강 코칭", images: [`${siteUrl}/og.png`], locale: "ko_KR", type: "website" },
+  twitter: { card: "summary_large_image", title: "건강자산", description: "프리미엄 건강 코칭", images: [`${siteUrl}/og.png`] },
+};
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

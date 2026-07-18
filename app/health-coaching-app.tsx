@@ -5,6 +5,16 @@ import { AXES, calculateConfidence, calculateOverallAsset } from "../lib/scoring
 
 type View = "dashboard" | "clients" | "session" | "settings";
 type Period = "today" | "week" | "month";
+type Customer = {
+  name: string;
+  age: number;
+  status: string;
+  score: number;
+  change: string;
+  next: string;
+  coach: string;
+  color: string;
+};
 
 const nav: Array<[View, string, string]> = [
   ["dashboard", "⌂", "운영 홈"],
@@ -13,7 +23,7 @@ const nav: Array<[View, string, string]> = [
   ["settings", "⚙", "링크·운영 설정"],
 ];
 
-const customers = [
+const customers: Customer[] = [
   { name: "김서연", age: 38, status: "4주 관리 중", score: 72, change: "+5", next: "오늘 14:00", coach: "윤서진", color: "peach" },
   { name: "박지현", age: 45, status: "정밀 문진 대기", score: 68, change: "첫 평가", next: "오늘 16:30", coach: "윤서진", color: "mint" },
   { name: "이민호", age: 41, status: "후속 체크인", score: 76, change: "+3", next: "7월 18일", coach: "윤서진", color: "blue" },
@@ -154,8 +164,8 @@ function Metric({ label, value, suffix, note, tone }: { label: string; value: nu
 }
 
 function Clients({ query, setQuery, customers, select, selected, shareOpen, setShareOpen, copied, copyLink }: {
-  query: string; setQuery: (value: string) => void; customers: typeof customers;
-  select: (customer: typeof customers[number]) => void; selected: typeof customers[number];
+  query: string; setQuery: (value: string) => void; customers: Customer[];
+  select: (customer: Customer) => void; selected: Customer;
   shareOpen: boolean; setShareOpen: (value: boolean) => void; copied: string; copyLink: (id: string, url: string) => void;
 }) {
   return <>
