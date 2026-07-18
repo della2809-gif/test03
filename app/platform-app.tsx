@@ -100,7 +100,7 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
         <div className="asset-hero-copy">
           <div className="asset-eyebrow">AI HEALTH ASSET PLATFORM</div>
           <h1>건강도 관리하면<br /><em>복리가 됩니다.</em></h1>
-          <p>혈당·피로·수면·장 건강·체성분을 5분 만에 체크하고, 매일 작은 실천으로 나만의 건강자산을 쌓아보세요.</p>
+          <p>혈당대사부터 회복력까지 12대 건강영역을 5분 만에 체크하고, 매일 작은 실천으로 나만의 건강자산을 쌓아보세요.</p>
           <div className="asset-hero-actions">
             <button className="asset-solid" onClick={() => navigate("check")}>5분 무료 건강체크 <span>→</span></button>
             <button className="asset-ghost" onClick={() => navigate("passport")}>내 건강여권 미리보기</button>
@@ -113,7 +113,7 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
           <div className="asset-report-top"><span>나의 건강자산</span><b>이번 주 +4</b></div>
           <div className="asset-score-ring"><div><strong>74</strong><span>양호</span></div></div>
           <div className="asset-mini-bars">
-            {[["수면", 68], ["혈당 리듬", 72], ["회복", 81]].map(([label, value]) => (
+            {[["회복력", 68], ["혈당대사", 72], ["에너지", 81]].map(([label, value]) => (
               <div key={label}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><strong>{value}</strong></div>
             ))}
           </div>
