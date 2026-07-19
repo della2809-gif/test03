@@ -22,6 +22,7 @@ import {
   assessCheckupData,
   type ObjectiveDataAssessment,
 } from "../features/clinical-rules/index.ts";
+import { extractCheckupValuesFromText } from "../features/clinical-rules/pdf-extraction.ts";
 import { localizeQuestion } from "../features/health-assessment/i18n.ts";
 import { recommendJournalContent } from "../lib/journal-content.ts";
 import {
@@ -311,6 +312,10 @@ function AssessmentResult({
   const [inbodySaved, setInbodySaved] = useState(false);
   const [checkupUpload, setCheckupUpload] = useState("");
   const [inbodyUpload, setInbodyUpload] = useState("");
+  const [checkupUploadStatus, setCheckupUploadStatus] = useState<
+    "idle" | "processing" | "applied" | "partial" | "failed"
+  >("idle");
+  const [checkupUploadMessage, setCheckupUploadMessage] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [checkupValues, setCheckupValues] = useState<Record<string, string>>(
     {},
@@ -370,15 +375,66 @@ function AssessmentResult({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function selectUpload(type: "checkup" | "inbody", file?: File) {
+  async function selectUpload(type: "checkup" | "inbody", file?: File) {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
       setUploadError("파일 크기는 10MB 이하만 선택할 수 있습니다.");
       return;
     }
     setUploadError("");
-    if (type === "checkup") setCheckupUpload(file.name);
-    else setInbodyUpload(file.name);
+    if (type === "checkup") {
+      setCheckupUpload(file.name);
+      if (
+        file.type === "application/pdf" ||
+        file.name.toLowerCase().endsWith(".pdf")
+      ) {
+        setCheckupUploadStatus("processing");
+        setCheckupUploadMessage("PDF에서 건강검진 수치를 읽고 있습니다.");
+        try {
+          const { extractText, getDocumentProxy } = await import("unpdf");
+          const pdf = await getDocumentProxy(
+            new Uint8Array(await file.arrayBuffer()),
+          );
+          const extracted = await extractText(pdf, { mergePages: true });
+          await pdf.destroy();
+          const parsed = extractCheckupValuesFromText(extracted.text);
+
+          if (parsed.foundFields.length === 0) {
+            setCheckupUploadStatus("failed");
+            setCheckupUploadMessage(
+              "문서에서 수치를 찾지 못했습니다. 스캔 이미지 PDF라면 OCR 연결이 필요합니다.",
+            );
+            return;
+          }
+
+          setCheckupValues((current) => ({
+            ...current,
+            ...parsed.values,
+            bpContext: current.bpContext ?? "office",
+          }));
+          setCheckupSaved(true);
+          const complete = parsed.missingFields.length === 0;
+          setCheckupUploadStatus(complete ? "applied" : "partial");
+          setCheckupUploadMessage(
+            complete
+              ? `건강검진 수치 ${parsed.foundFields.length}개를 자동 반영했습니다.`
+              : `확인된 수치 ${parsed.foundFields.length}개를 자동 반영했습니다. 없는 항목은 점수에서 제외됩니다.`,
+          );
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        } catch {
+          setCheckupUploadStatus("failed");
+          setCheckupUploadMessage(
+            "PDF를 읽지 못했습니다. 암호화되었거나 스캔 이미지로만 된 문서인지 확인해주세요.",
+          );
+          return;
+        }
+      }
+      setCheckupUploadStatus("idle");
+      setCheckupUploadMessage("");
+    } else {
+      setInbodyUpload(file.name);
+    }
     openInput(type);
   }
 
@@ -530,7 +586,30 @@ function AssessmentResult({
               <div><h3>건강검진</h3><p>혈압·혈당·지질·간수치</p></div>
               <strong>+20%</strong>
             </div>
-            {checkupUpload && <div className="selected-upload">📄 {checkupUpload}<span>수치 확인 필요</span></div>}
+            {checkupUpload && (
+              <div className="selected-upload">
+                📄 {checkupUpload}
+                <span className={checkupUploadStatus}>
+                  {checkupUploadStatus === "processing"
+                    ? "분석 중"
+                    : checkupUploadStatus === "applied"
+                      ? "자동 반영 완료"
+                      : checkupUploadStatus === "partial"
+                        ? "확인 수치 반영"
+                        : checkupUploadStatus === "failed"
+                          ? "자동 인식 실패"
+                          : "수치 확인 필요"}
+                </span>
+              </div>
+            )}
+            {checkupUploadMessage && (
+              <p
+                className={`upload-analysis-message ${checkupUploadStatus}`}
+                role={checkupUploadStatus === "failed" ? "alert" : "status"}
+              >
+                {checkupUploadMessage}
+              </p>
+            )}
             <div className="objective-entry-buttons">
               <button onClick={() => openInput("checkup")}>
                 {checkupSaved ? "입력 수치 수정" : "수치 직접 입력"}
@@ -540,9 +619,11 @@ function AssessmentResult({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(event) =>
-                    selectUpload("checkup", event.target.files?.[0])
-                  }
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    void selectUpload("checkup", file);
+                  }}
                 />
               </label>
             </div>
@@ -563,16 +644,18 @@ function AssessmentResult({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(event) =>
-                    selectUpload("inbody", event.target.files?.[0])
-                  }
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    void selectUpload("inbody", file);
+                  }}
                 />
               </label>
             </div>
           </article>
         </div>
         {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
-        <p className="upload-privacy">🔒 공개 데모에서는 선택한 파일을 서버로 전송하거나 저장하지 않습니다. 파일을 선택하면 결과지 수치를 확인하는 입력 화면으로 이동합니다.</p>
+        <p className="upload-privacy">🔒 건강검진 PDF는 이 기기에서만 분석하며 서버로 전송하거나 저장하지 않습니다. 인식된 수치는 별도 입력 없이 점수와 데이터 신뢰도에 반영됩니다.</p>
       </section>
       {showMethod && (
         <section className="method-panel">
@@ -707,7 +790,7 @@ function ObjectiveDataForm({
         <div>
           <span>{type === "checkup" ? "HEALTH CHECKUP" : "BODY COMPOSITION"}</span>
           <h2>{title}</h2>
-          <p>{selectedFileName ? `${selectedFileName} 파일을 선택했습니다. 결과지의 수치를 확인해 입력해주세요.` : "결과지에 표시된 수치를 그대로 입력해주세요. 모든 항목은 필수입니다."}</p>
+          <p>{selectedFileName ? `${selectedFileName}에서 자동 인식된 수치를 확인하거나 수정할 수 있습니다.` : "결과지에 표시된 수치를 입력해주세요. 확인 가능한 항목만 입력해도 반영됩니다."}</p>
         </div>
         <button type="button" onClick={onCancel} aria-label="입력 닫기">×</button>
       </div>
@@ -742,7 +825,6 @@ function ObjectiveDataForm({
             <span>{field.label}</span>
             <div>
               <input
-                required
                 type="number"
                 inputMode="decimal"
                 min={field.min}
