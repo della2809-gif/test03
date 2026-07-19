@@ -48,3 +48,38 @@
 @media(max-width:760px){.objective-context-grid{grid-template-columns:1fr}.domain-objective-values>span{white-space:normal}.pdf-password-form>div{grid-template-columns:1fr}.pdf-password-form>div>button{min-height:44px}}
 .objective-found-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 18px;padding:12px 15px;border-radius:12px;background:#f1f7f3;color:#536960;font-size:12px}.objective-found-summary b{color:var(--assessment-green);font-size:13px}.objective-field-sections{display:grid;gap:18px}.objective-field-sections fieldset{min-width:0;margin:0;padding:17px;border:1px solid #dce7e1;border-radius:15px;background:#fcfdfb}.objective-field-sections legend{padding:0 8px;color:#214f43;font-size:13px;font-weight:900}.objective-field-grid label.has-value>span::after{content:"인식";display:inline-block;margin-left:6px;padding:2px 5px;border-radius:99px;background:#dff0e8;color:#176b5b;font-size:9px;vertical-align:1px}.objective-field-grid label.has-value>div{border-color:#85baa6;background:#f3faf6}.objective-review-confirmation{display:flex;align-items:flex-start;gap:11px;margin-top:18px;padding:15px;border:1px solid #e6d49e;border-radius:13px;background:#fffaf0;color:#665f4d;font-size:12px;line-height:1.55}.objective-review-confirmation input{width:18px;height:18px;margin-top:1px;accent-color:var(--assessment-green)}.objective-review-confirmation span{display:grid}.objective-review-confirmation b{color:#3d4e47;font-size:13px}.objective-form-actions button:disabled{cursor:not-allowed;opacity:.45}
 @media(max-width:760px){.objective-found-summary{align-items:flex-start;flex-direction:column;gap:4px}.objective-field-sections fieldset{padding:14px 10px}.objective-review-confirmation{padding:13px}}
+
+/* WELLSETS brand system: navy + teal + lime */
+.asset-app{--forest:#10438d;--leaf:#20aa9e;--acid:#a8d65b;--milk:#f7fbfd;--warm:#f2f7fb;--ink:#153b60;--muted:#64798d;--line:#dbe7ef;--paper:#fbfdfe;--cream:#f1f7fb;--mint:#e4f7f4;min-height:100vh;background:radial-gradient(circle at 88% 4%,rgba(168,214,91,.18),transparent 29rem),linear-gradient(180deg,#fcfefd 0%,#f6fbfd 55%,#fbfdf8 100%);color:#153b60}
+.asset-app,.asset-app *{font-family:"Avenir Next","Montserrat","Pretendard","Noto Sans KR","Apple SD Gothic Neo",Arial,sans-serif}
+.asset-header{border-bottom-color:#dce8ef;background:rgba(252,254,253,.9)}
+.asset-header nav button,.asset-header nav a,.asset-coach-link{color:#5d7488}.asset-header nav button:hover,.asset-header nav a:hover,.asset-header nav button.active,.asset-coach-link:hover{color:#20aa9e}
+.language-switcher{border-color:#d8e6ed;background:#f1f7fa}.language-switcher button{color:#63798b}.language-switcher button.active{background:#10438d;color:#fff}
+.asset-solid{border-color:#10438d;background:#10438d}.asset-solid:hover{border-color:#20aa9e;background:#20aa9e}.asset-ghost{border-color:#cbdde7;color:#10438d}.asset-light{color:#10438d}
+.asset-hero:before{background:linear-gradient(145deg,rgba(168,214,91,.24),rgba(32,170,158,.12))}
+.asset-hero-copy h1,.asset-section-head h2,.weekly-card h2,.passport-promo h2,.asset-vip h2,.asset-final-cta h2,.inner-head h1,.assessment-intro>h1,.assessment-transition>h1,.assessment-question-card h1,.result-hero-new h1,.result-section-head h2,.priority-card-grid h3,.result-action-panel h2,.journal-recommendation-grid h3{font-family:"Avenir Next","Montserrat","Pretendard","Noto Sans KR","Apple SD Gothic Neo",Arial,sans-serif;font-weight:750;letter-spacing:-.045em}
+.asset-hero-copy h1{color:#103f79}.asset-hero-copy h1 em{color:#20aa9e}
+.asset-hero-copy>p,.asset-section-head>p{color:#60788b}
+.asset-hero-visual{border-color:#d8e7ee;box-shadow:0 30px 80px rgba(16,67,141,.16)}
+.asset-report-top b{background:#eef8d8;color:#557a18}.asset-score-ring{background:conic-gradient(#20aa9e 74%,#e6eef2 0)}.asset-mini-bars i{background:#e6eef2}.asset-mini-bars i b{background:linear-gradient(90deg,#10438d,#20aa9e)}.asset-ai-note{background:#edf7f6}.asset-ai-note>span{background:#10438d}
+.asset-float{border-color:#dbe8ee;box-shadow:0 15px 35px rgba(16,67,141,.12)}
+.journey-section{border-top-color:#dfe9ef}.journey-grid>div{background:#eef5f8}.journey-grid .featured{background:linear-gradient(150deg,#10438d,#146f92);box-shadow:0 15px 35px rgba(16,67,141,.2)}
+.weekly-card{background:#f1f6fb}.chat-ai{border:1px solid #dce8ef}.chat-action{background:linear-gradient(135deg,#10438d,#176f90)}.passport-promo{background:#e8f6f4}.passport-cover{background:linear-gradient(150deg,#10438d,#126e86);box-shadow:12px 12px 0 #c9e3e4}
+.asset-vip,.result-hero-new{background:linear-gradient(130deg,#0f3f82,#167f91)}.asset-vip>div>p,.result-hero-new p{color:#c9e4e8}.vip-ticket{background:#f3f8e8;color:#10438d}.vip-ticket p{color:#10438d!important}
+.asset-final-cta{background:linear-gradient(135deg,#eef8dc,#e6f6f4)}
+.asset-footer{background:#082f65}.asset-footer p{color:#bcd2e2}.asset-footer button{color:#d5e3ed}
+.passport-score,.result-score-card,.mission-summary{background:linear-gradient(145deg,#10438d,#146d8d)}.result-ring:before{background:#124e7b}.spark i{background:linear-gradient(180deg,#a8d65b,#20aa9e)}
+.point-pill{background:#edf7d8}.reward-wallet{background:#edf5f8}.group-grid article{border:1px solid #dce8ef}
+.assessment-page,.assessment-result-page,.assessment-objective-page{--assessment-green:#20aa9e;--assessment-dark:#10438d;--assessment-mint:#e4f7f4;color:#173d60}
+.assessment-kicker,.result-section-head span,.priority-card-grid article>span,.objective-entry-head span,.objective-form-head span{color:#138f88}
+.assessment-stage-grid article,.assessment-question-card,.priority-card-grid article,.objective-data-form,.clinical-reference-panel,.objective-entry-panel{border-color:#dbe7ef;box-shadow:0 18px 60px rgba(16,67,141,.07)}
+.assessment-output,.confidence-panel,.clinical-reference-notice{background:#edf6f8}.assessment-primary,.objective-entry-buttons label,.objective-form-actions button[type=submit]{background:#10438d;border-color:#10438d}
+.assessment-progress i,.transition-confidence i b,.confidence-panel i b,.domain-score-list>article>i b{background:linear-gradient(90deg,#10438d,#20aa9e)}
+.assessment-phase-tabs span.active b,.assessment-options button.selected>i,.objective-upload-receipt>i{background:#20aa9e}
+.assessment-options button:hover,.assessment-options button.selected{border-color:#20aa9e;background:#ebf8f6}.question-domain{background:#e4f7f4;color:#138f88}
+.result-hero-new .assessment-kicker,.result-hero-new h1 em{color:#b9e768}.result-main-ring{background:conic-gradient(#a8d65b var(--score),rgba(255,255,255,.14) 0)}.result-main-ring:before{background:#12557d}
+.priority-card-grid article>div,.domain-score-list>article>span,.clinical-domain-links>span,.clinical-source-links a,.domain-objective-values>span{background:#eaf6f6;color:#176f77}.result-action-panel,.journal-recommendation-section{background:linear-gradient(135deg,#eef8dc,#e6f6f4)}
+.objective-entry-head>b{background:#eef8d8;color:#557a18}.objective-entry-grid article.complete,.confidence-panel .objective-input-actions>button.complete{background:#e7f7f2;border-color:#89cfc4}
+.objective-field-grid label.has-value>div{border-color:#61bfb3;background:#f0faf8}.objective-field-grid label.has-value>span::after{background:#dff4ef;color:#138f88}
+.account-period-tabs button.active{background:#10438d}.account-trend i,.health-metric-chart i{background:linear-gradient(180deg,#a8d65b,#20aa9e)}
+.clinical-band.reference{background:#e4f7f1;color:#14755e}.clinical-band.context{background:#eaf2f8;color:#315f81}
