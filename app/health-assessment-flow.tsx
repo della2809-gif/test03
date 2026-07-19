@@ -23,7 +23,10 @@ import {
   type MetricAssessment,
   type ObjectiveDataAssessment,
 } from "../features/clinical-rules/index.ts";
-import { extractCheckupValuesFromText } from "../features/clinical-rules/pdf-extraction.ts";
+import {
+  extractCheckupValuesFromText,
+  type CheckupPdfExtraction,
+} from "../features/clinical-rules/pdf-extraction.ts";
 import { getPdfPasswordErrorKind } from "../features/clinical-rules/pdf-password.ts";
 import { localizeQuestion } from "../features/health-assessment/i18n.ts";
 import { recommendJournalContent } from "../lib/journal-content.ts";
@@ -404,10 +407,9 @@ function AssessmentResult({
   }
 
   function applyOcrResult(
-    text: string,
-    options: { pagesProcessed?: number; truncated?: boolean } = {},
+    parsed: CheckupPdfExtraction,
+    options: { pagesProcessed?: number; totalPages?: number } = {},
   ) {
-    const parsed = extractCheckupValuesFromText(text);
     if (parsed.foundFields.length === 0) {
       clearProtectedPdf();
       setCheckupUploadStatus("failed");
@@ -428,11 +430,8 @@ function AssessmentResult({
     const pageNotice = options.pagesProcessed
       ? ` ${options.pagesProcessed}쪽을 확인했습니다.`
       : "";
-    const truncationNotice = options.truncated
-      ? " 첫 8쪽까지만 인식했으므로 나머지 수치는 직접 확인해주세요."
-      : "";
     setCheckupUploadMessage(
-      `OCR가 수치 ${parsed.foundFields.length}개를 찾았습니다.${pageNotice}${truncationNotice} 정확성을 확인한 뒤 입력을 완료해주세요.`,
+      `12건강축에 필요한 수치 ${parsed.foundFields.length}개를 찾았습니다.${pageNotice} 원본과 대조해 확인한 뒤에만 반영됩니다.`,
     );
     setInputPanel("checkup");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -449,11 +448,11 @@ function AssessmentResult({
       const { recognizeHealthDocumentImage } = await import(
         "../features/clinical-rules/client-ocr.ts"
       );
-      const text = await recognizeHealthDocumentImage(file, (progress) => {
+      const result = await recognizeHealthDocumentImage(file, (progress) => {
         setOcrProgress(progress.percent);
         setCheckupUploadMessage(progress.message);
       });
-      applyOcrResult(text);
+      applyOcrResult(result, result);
     } catch {
       setCheckupUploadStatus("failed");
       setCheckupUploadMessage(
@@ -477,7 +476,7 @@ function AssessmentResult({
       setOcrProgress(progress.percent);
       setCheckupUploadMessage(progress.message);
     });
-    return applyOcrResult(result.text, result);
+    return applyOcrResult(result, result);
   }
 
   async function analyzeCheckupPdf(file: File, password?: string) {
@@ -502,21 +501,10 @@ function AssessmentResult({
           return;
         }
 
-        setCheckupValues((current) => ({
-          ...current,
-          ...parsed.values,
-          bpContext: current.bpContext ?? "office",
-        }));
-        setCheckupSaved(true);
-        clearProtectedPdf();
-        const complete = parsed.missingFields.length === 0;
-        setCheckupUploadStatus(complete ? "applied" : "partial");
-        setCheckupUploadMessage(
-          complete
-            ? `건강검진 수치 ${parsed.foundFields.length}개를 자동 반영했습니다.`
-            : `확인된 수치 ${parsed.foundFields.length}개를 자동 반영했습니다. 없는 항목은 점수에서 제외됩니다.`,
-        );
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        applyOcrResult(parsed, {
+          pagesProcessed: pdf.numPages,
+          totalPages: pdf.numPages,
+        });
       } finally {
         await pdf.destroy();
       }
@@ -712,6 +700,10 @@ function AssessmentResult({
             <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10088549/" target="_blank" rel="noreferrer">대한비만학회</a>
             <a href="https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf" target="_blank" rel="noreferrer">KDIGO 신장 기준</a>
             <a href="https://www.who.int/publications/i/item/9789240088542" target="_blank" rel="noreferrer">WHO 혈색소 기준</a>
+            <a href="https://medlineplus.gov/lab-tests/complete-blood-count-cbc/" target="_blank" rel="noreferrer">NIH 혈구검사 해설</a>
+            <a href="https://medlineplus.gov/lab-tests/c-reactive-protein-crp-test/" target="_blank" rel="noreferrer">NIH CRP 해설</a>
+            <a href="https://ods.od.nih.gov/factsheets/VitaminD-HealthProfessional/" target="_blank" rel="noreferrer">NIH 비타민 D 기준</a>
+            <a href="https://www.thyroid.org/wp-content/uploads/2026/01/thyroid-stimulating-hormone-and-thyroid-hormones-triiodothyronine-and-thyroxine-an-american-thyroid-association.pdf" target="_blank" rel="noreferrer">미국갑상선학회 TSH 해설</a>
           </div>
         </section>
       )}
@@ -959,21 +951,37 @@ function AssessmentResult({
 }
 
 const CHECKUP_FIELDS = [
-  { id: "waist", label: "허리둘레", unit: "cm", min: 30, max: 250, step: 0.1 },
-  { id: "systolic", label: "수축기 혈압", unit: "mmHg", min: 50, max: 260, step: 1 },
-  { id: "diastolic", label: "이완기 혈압", unit: "mmHg", min: 30, max: 180, step: 1 },
-  { id: "hemoglobin", label: "혈색소", unit: "g/dL", min: 3, max: 25, step: 0.1 },
-  { id: "fastingGlucose", label: "공복혈당", unit: "mg/dL", min: 30, max: 600, step: 1 },
-  { id: "hba1c", label: "당화혈색소", unit: "%", min: 2, max: 20, step: 0.1 },
-  { id: "totalCholesterol", label: "총콜레스테롤", unit: "mg/dL", min: 30, max: 800, step: 1 },
-  { id: "ldl", label: "LDL 콜레스테롤", unit: "mg/dL", min: 10, max: 500, step: 1 },
-  { id: "hdl", label: "HDL 콜레스테롤", unit: "mg/dL", min: 5, max: 200, step: 1 },
-  { id: "triglycerides", label: "중성지방", unit: "mg/dL", min: 10, max: 1500, step: 1 },
-  { id: "ast", label: "AST", unit: "U/L", min: 1, max: 2000, step: 1 },
-  { id: "alt", label: "ALT", unit: "U/L", min: 1, max: 1000, step: 1 },
-  { id: "ggt", label: "감마지티피(γ-GTP)", unit: "U/L", min: 1, max: 2000, step: 1 },
-  { id: "creatinine", label: "혈청 크레아티닌", unit: "mg/dL", min: 0.1, max: 30, step: 0.01 },
-  { id: "egfr", label: "신사구체여과율(eGFR)", unit: "mL/min/1.73㎡", min: 1, max: 250, step: 1 },
+  { group: "기본·혈압", id: "waist", label: "허리둘레", unit: "cm", min: 30, max: 250, step: 0.1 },
+  { group: "기본·혈압", id: "systolic", label: "수축기 혈압", unit: "mmHg", min: 50, max: 260, step: 1 },
+  { group: "기본·혈압", id: "diastolic", label: "이완기 혈압", unit: "mmHg", min: 30, max: 180, step: 1 },
+  { group: "혈당·지질", id: "fastingGlucose", label: "공복혈당", unit: "mg/dL", min: 30, max: 600, step: 1 },
+  { group: "혈당·지질", id: "hba1c", label: "당화혈색소", unit: "%", min: 2, max: 20, step: 0.1 },
+  { group: "혈당·지질", id: "totalCholesterol", label: "총콜레스테롤", unit: "mg/dL", min: 30, max: 800, step: 1 },
+  { group: "혈당·지질", id: "ldl", label: "LDL 콜레스테롤", unit: "mg/dL", min: 10, max: 500, step: 1 },
+  { group: "혈당·지질", id: "hdl", label: "HDL 콜레스테롤", unit: "mg/dL", min: 5, max: 200, step: 1 },
+  { group: "혈당·지질", id: "triglycerides", label: "중성지방", unit: "mg/dL", min: 10, max: 1500, step: 1 },
+  { group: "혈액·영양", id: "hemoglobin", label: "혈색소", unit: "g/dL", min: 3, max: 25, step: 0.1 },
+  { group: "혈액·영양", id: "wbc", label: "백혈구(WBC)", unit: "10³/µL", min: 0.1, max: 100, step: 0.01 },
+  { group: "혈액·영양", id: "platelets", label: "혈소판", unit: "10³/µL", min: 1, max: 1500, step: 1 },
+  { group: "혈액·영양", id: "ferritin", label: "페리틴", unit: "ng/mL", min: 0.1, max: 5000, step: 0.1 },
+  { group: "혈액·영양", id: "vitaminB12", label: "비타민 B12", unit: "pg/mL", min: 10, max: 5000, step: 1 },
+  { group: "혈액·영양", id: "albumin", label: "알부민", unit: "g/dL", min: 0.5, max: 8, step: 0.1 },
+  { group: "염증·면역", id: "crp", label: "CRP", unit: "mg/L", min: 0, max: 500, step: 0.01 },
+  { group: "염증·면역", id: "hsCrp", label: "고감도 CRP", unit: "mg/L", min: 0, max: 100, step: 0.01 },
+  { group: "염증·면역", id: "esr", label: "적혈구침강속도(ESR)", unit: "mm/hr", min: 0, max: 200, step: 1 },
+  { group: "호르몬·회복", id: "tsh", label: "갑상선자극호르몬(TSH)", unit: "mIU/L", min: 0.001, max: 200, step: 0.001 },
+  { group: "호르몬·회복", id: "freeT4", label: "유리 T4", unit: "ng/dL", min: 0.01, max: 20, step: 0.01 },
+  { group: "호르몬·회복", id: "vitaminD", label: "25-OH 비타민 D", unit: "ng/mL", min: 1, max: 300, step: 0.1 },
+  { group: "호르몬·회복", id: "calcium", label: "칼슘", unit: "mg/dL", min: 1, max: 20, step: 0.1 },
+  { group: "호르몬·회복", id: "ck", label: "크레아틴키나아제(CK)", unit: "U/L", min: 1, max: 20000, step: 1 },
+  { group: "간·신장", id: "ast", label: "AST", unit: "U/L", min: 1, max: 2000, step: 1 },
+  { group: "간·신장", id: "alt", label: "ALT", unit: "U/L", min: 1, max: 2000, step: 1 },
+  { group: "간·신장", id: "ggt", label: "감마지티피(γ-GTP)", unit: "U/L", min: 1, max: 2000, step: 1 },
+  { group: "간·신장", id: "totalBilirubin", label: "총 빌리루빈", unit: "mg/dL", min: 0, max: 50, step: 0.01 },
+  { group: "간·신장", id: "alp", label: "알칼리성 인산분해효소(ALP)", unit: "U/L", min: 1, max: 3000, step: 1 },
+  { group: "간·신장", id: "creatinine", label: "혈청 크레아티닌", unit: "mg/dL", min: 0.1, max: 30, step: 0.01 },
+  { group: "간·신장", id: "egfr", label: "사구체여과율(eGFR)", unit: "mL/min/1.73㎡", min: 1, max: 250, step: 1 },
+  { group: "간·신장", id: "bun", label: "혈액요소질소(BUN)", unit: "mg/dL", min: 1, max: 300, step: 0.1 },
 ] as const;
 
 const INBODY_FIELDS = [
@@ -1005,12 +1013,22 @@ function ObjectiveDataForm({
       ? { ...initialValues, bpContext: "office" }
       : initialValues,
   );
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const requiresReview = type === "checkup" && Boolean(selectedFileName);
+  const fieldGroups = type === "checkup"
+    ? Array.from(new Set(CHECKUP_FIELDS.map((field) => field.group))).map((group) => ({
+        group,
+        fields: CHECKUP_FIELDS.filter((field) => field.group === group),
+      }))
+    : [{ group: "인바디 측정값", fields: INBODY_FIELDS }];
+  const filledCount = fields.filter((field) => values[field.id]?.trim()).length;
 
   return (
     <form
       className="objective-data-form"
       onSubmit={(event) => {
         event.preventDefault();
+        if (requiresReview && !reviewConfirmed) return;
         onSave(values);
       }}
     >
@@ -1030,6 +1048,12 @@ function ObjectiveDataForm({
             <span>{selectedFileName}</span>
           </div>
           <em>수치 확인 단계</em>
+        </div>
+      )}
+      {type === "checkup" && (
+        <div className="objective-found-summary">
+          <b>확인할 수치 {filledCount}개</b>
+          <span>점수 직접 반영 항목과 12건강축 참고 항목을 함께 표시합니다.</span>
         </div>
       )}
       {type === "checkup" && (
@@ -1063,35 +1087,51 @@ function ObjectiveDataForm({
           </label>
         </div>
       )}
-      <div className="objective-field-grid">
-        {fields.map((field) => (
-          <label key={field.id}>
-            <span>{field.label}</span>
-            <div>
-              <input
-                type="number"
-                inputMode="decimal"
-                min={field.min}
-                max={field.max}
-                step={field.step}
-                value={values[field.id] ?? ""}
-                onChange={(event) =>
-                  setValues({ ...values, [field.id]: event.target.value })
-                }
-                aria-describedby={`${field.id}-unit`}
-              />
-              <b id={`${field.id}-unit`}>{field.unit}</b>
+      <div className="objective-field-sections">
+        {fieldGroups.map(({ group, fields: groupFields }) => (
+          <fieldset key={group}>
+            <legend>{group}</legend>
+            <div className="objective-field-grid">
+              {groupFields.map((field) => (
+                <label key={field.id} className={values[field.id] ? "has-value" : ""}>
+                  <span>{field.label}</span>
+                  <div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={field.min}
+                      max={field.max}
+                      step={field.step}
+                      value={values[field.id] ?? ""}
+                      onChange={(event) => setValues({ ...values, [field.id]: event.target.value })}
+                      aria-describedby={`${field.id}-unit`}
+                    />
+                    <b id={`${field.id}-unit`}>{field.unit}</b>
+                  </div>
+                </label>
+              ))}
             </div>
-          </label>
+          </fieldset>
         ))}
       </div>
+      {requiresReview && (
+        <label className="objective-review-confirmation">
+          <input
+            type="checkbox"
+            checked={reviewConfirmed}
+            onChange={(event) => setReviewConfirmed(event.target.checked)}
+            required
+          />
+          <span><b>원본 결과지와 자동 인식 수치를 대조했습니다.</b> OCR 오인식이나 단위 차이를 수정한 뒤 체크해주세요.</span>
+        </label>
+      )}
       <div className="objective-form-notice">
         <b>개인정보 안내</b>
         공개 데모에서는 입력값을 서버 또는 브라우저 저장소에 보관하지 않고 현재 화면의 신뢰도 표시만 갱신합니다.
       </div>
       <div className="objective-form-actions">
         <button type="button" onClick={onCancel}>취소</button>
-        <button type="submit">입력 완료 · 점수와 신뢰도 반영</button>
+        <button type="submit" disabled={requiresReview && !reviewConfirmed}>확인 완료 · 점수와 신뢰도 반영</button>
       </div>
     </form>
   );

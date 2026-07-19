@@ -62,7 +62,7 @@ test("건강검진 PDF 텍스트에서 주요 수치를 추출한다", () => {
     creatinine: "0.8",
     egfr: "102",
   });
-  assert.equal(result.missingFields.length, 0);
+  assert.equal(result.foundFields.length, 15);
 });
 
 test("분리 표기된 혈압과 영문 검사명을 인식한다", () => {
@@ -111,4 +111,32 @@ test("임상 입력 범위를 벗어난 오인식 값은 제외한다", () => {
   assert.equal(result.values.fastingGlucose, undefined);
   assert.equal(result.values.hba1c, undefined);
   assert.equal(result.values.alt, "25");
+});
+
+test("12건강축 참고 검사명과 단위를 찾아 정규화한다", () => {
+  const result = extractCheckupValuesFromText(`
+    백혈구 WBC 5.7 10^3/uL
+    혈소판 245000 /uL
+    Ferritin 42 ng/mL
+    hs-CRP 0.08 mg/dL
+    ESR 12 mm/hr
+    TSH 2.14 mIU/L
+    Free T4 1.21 ng/dL
+    25-OH Vitamin D 28.5 ng/mL
+    Vitamin B12 512 pg/mL
+    Albumin 4.3 g/dL
+    Total Bilirubin 0.7 mg/dL
+    ALP 71 U/L
+    BUN 14.2 mg/dL
+    Calcium 9.4 mg/dL
+    CK 88 U/L
+  `);
+
+  assert.equal(result.values.wbc, "5.7");
+  assert.equal(result.values.platelets, "245");
+  assert.equal(result.values.hsCrp, "0.8");
+  assert.equal(result.values.tsh, "2.14");
+  assert.equal(result.values.vitaminD, "28.5");
+  assert.equal(result.values.albumin, "4.3");
+  assert.equal(result.values.ck, "88");
 });

@@ -567,6 +567,41 @@ function summarizeObjective(
   };
 }
 
+const CONTEXT_CHECKUP_METRICS = [
+  { id: "wbc", label: "백혈구(WBC)", unit: "10³/µL", domains: ["immune", "inflammation"], note: "감염·염증·면역 상태를 함께 보는 혈구 수치입니다." },
+  { id: "platelets", label: "혈소판", unit: "10³/µL", domains: ["circulation", "inflammation"], note: "응고와 염증 맥락을 함께 확인하는 혈구 수치입니다." },
+  { id: "ferritin", label: "페리틴", unit: "ng/mL", domains: ["energy", "recovery", "skin-aging"], note: "저장 철 상태와 피로·회복의 간접 근거입니다." },
+  { id: "crp", label: "CRP", unit: "mg/L", domains: ["inflammation", "immune", "recovery"], note: "몸의 염증 정도를 보여주지만 원인이나 위치를 단독으로 진단하지는 못합니다." },
+  { id: "hsCrp", label: "고감도 CRP", unit: "mg/L", domains: ["inflammation", "circulation"], note: "낮은 수준의 염증과 심혈관 위험 평가에 참고하는 수치입니다." },
+  { id: "esr", label: "적혈구침강속도(ESR)", unit: "mm/hr", domains: ["inflammation", "immune"], note: "염증 여부를 다른 검사와 함께 해석하는 비특이적 지표입니다." },
+  { id: "tsh", label: "갑상선자극호르몬(TSH)", unit: "mIU/L", domains: ["hormone", "energy", "brain-stress", "skin-aging"], note: "갑상선 조절 상태의 핵심 선별 수치이며 연령·약물·검사법의 영향을 받습니다." },
+  { id: "freeT4", label: "유리 T4", unit: "ng/dL", domains: ["hormone", "energy"], note: "TSH와 함께 갑상선 호르몬 상태를 해석하는 수치입니다." },
+  { id: "vitaminD", label: "25-OH 비타민 D", unit: "ng/mL", domains: ["body-composition", "immune"], note: "비타민 D 상태의 주된 지표로 뼈·근육 건강에 참고합니다." },
+  { id: "vitaminB12", label: "비타민 B12", unit: "pg/mL", domains: ["energy", "brain-stress"], note: "혈액세포 생성과 신경 기능의 간접 근거입니다." },
+  { id: "albumin", label: "알부민", unit: "g/dL", domains: ["liver", "gut", "recovery", "skin-aging"], note: "간 기능·영양·흡수 상태를 다른 검사와 함께 보는 수치입니다." },
+  { id: "totalBilirubin", label: "총 빌리루빈", unit: "mg/dL", domains: ["liver"], note: "적혈구 분해 산물의 간 처리와 배출을 확인하는 참고 수치입니다." },
+  { id: "alp", label: "알칼리성 인산분해효소(ALP)", unit: "U/L", domains: ["liver", "body-composition"], note: "간·담도와 뼈 대사의 맥락을 다른 검사와 함께 확인합니다." },
+  { id: "bun", label: "혈액요소질소(BUN)", unit: "mg/dL", domains: ["circulation"], note: "신장 기능과 수분·단백질 섭취의 영향을 함께 받는 참고 수치입니다." },
+  { id: "calcium", label: "칼슘", unit: "mg/dL", domains: ["body-composition"], note: "뼈·근육·신경 기능과 관련되며 알부민 등과 함께 해석합니다." },
+  { id: "ck", label: "크레아틴키나아제(CK)", unit: "U/L", domains: ["body-composition", "recovery"], note: "근육 손상과 운동 후 회복을 보는 참고 수치로 최근 운동의 영향을 받습니다." },
+] as const;
+
+function assessContextCheckupMetric(
+  definition: (typeof CONTEXT_CHECKUP_METRICS)[number],
+  value: number,
+): MetricAssessment {
+  return metric({
+    id: definition.id,
+    label: definition.label,
+    value: `${value} ${definition.unit}`,
+    band: "context",
+    interpretation: `${definition.note} 결과지의 검사실 참고범위를 우선 확인하세요.`,
+    wellnessScore: null,
+    domains: [...definition.domains],
+    evidence: "검사법·연령·성별·약물·급성 상태에 따라 참고범위가 달라질 수 있어 단독 점수화하지 않습니다.",
+  });
+}
+
 export function assessCheckupData(
   values: Record<string, string>,
 ): ObjectiveDataAssessment {
@@ -607,6 +642,10 @@ export function assessCheckupData(
   }
   const ggt = numberValue(values, "ggt");
   if (ggt !== null) metrics.push(assessGgt(ggt, sex));
+  for (const definition of CONTEXT_CHECKUP_METRICS) {
+    const value = numberValue(values, definition.id);
+    if (value !== null) metrics.push(assessContextCheckupMetric(definition, value));
+  }
   return summarizeObjective("checkup", metrics, [
     "혈청 크레아티닌은 연령·성별·근육량 영향을 받아 단독 점수화하지 않고 eGFR과 함께 참고합니다.",
     "검진기관의 자체 참고치가 결과지에 표시된 경우 해당 기준을 우선 확인하세요.",
