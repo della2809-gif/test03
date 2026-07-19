@@ -1,10 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { HealthAssessmentResult } from "../features/health-assessment/types.ts";
 import { HealthAssessmentFlow } from "./health-assessment-flow";
 import { HealthCoachingApp } from "./health-coaching-app";
 import { I18nProvider, LanguageSwitcher, useI18n } from "./i18n-provider";
+import {
+  ASSESSMENT_MODES,
+  getAssessmentMode,
+  type AssessmentMode,
+} from "../features/health-assessment/modes.ts";
+import {
+  captureJourneyContext,
+  recordJourneyEvent,
+  type JourneyContext,
+} from "../lib/journey-tracking.ts";
 import {
   aggregateHealthLedger,
   aggregateHealthMeasurements,
@@ -78,13 +88,39 @@ function PlatformRoot() {
 
 function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
   const { t } = useI18n();
-  const [view, setView] = useState<ConsumerView>("home");
+  const [view, setView] = useState<ConsumerView>(() => {
+    if (typeof window === "undefined") return "home";
+    const params = new URLSearchParams(window.location.search);
+    const requestedView = params.get("view");
+    if (requestedView === "passport") return "passport";
+    if (requestedView === "check" || params.has("mode")) return "check";
+    return "home";
+  });
+  const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>(() => {
+    if (typeof window === "undefined") return ASSESSMENT_MODES.full;
+    return getAssessmentMode(
+      new URLSearchParams(window.location.search).get("mode"),
+    );
+  });
+  const [journeyContext] = useState<JourneyContext>(() => {
+    if (typeof window === "undefined") return {};
+    return captureJourneyContext(window.location.search);
+  });
   const [assessmentResult, setAssessmentResult] =
     useState<HealthAssessmentResult | null>(null);
   const [missions, setMissions] = useState<number[]>([2]);
   const [toast, setToast] = useState("");
 
   const points = 240 + missions.reduce((sum, id) => sum + (missionsSeed.find((item) => item.id === id)?.point ?? 0), 0);
+
+  useEffect(() => {
+    if (view === "check") {
+      recordJourneyEvent("check_started", {
+        ...journeyContext,
+        checkId: assessmentMode.id,
+      });
+    }
+  }, [assessmentMode.id, journeyContext, view]);
 
   function navigate(next: ConsumerView) {
     setView(next);
@@ -96,11 +132,19 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
     window.setTimeout(() => setToast(""), 1800);
   }
 
+  function startFullCheck() {
+    setAssessmentMode(ASSESSMENT_MODES.full);
+    navigate("check");
+  }
+
   return (
     <div className="asset-app">
       <header className="asset-header">
         <button className="asset-logo" onClick={() => navigate("home")}><span>H+</span>{t("brand")}</button>
         <nav aria-label="건강자산 메뉴">
+          <a href="https://wellset-journal.fluffy-cow-3410.chatgpt.site/">
+            WELLSET Journal
+          </a>
           <button className={view === "passport" ? "active" : ""} onClick={() => navigate("passport")}>{t("healthAccount")}</button>
           <button className={view === "missions" ? "active" : ""} onClick={() => navigate("missions")}>{t("todayMission")}</button>
           <button className={view === "community" ? "active" : ""} onClick={() => navigate("community")}>{t("community")}</button>
@@ -108,15 +152,26 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
         <div className="asset-head-actions">
           <LanguageSwitcher />
           <button className="asset-coach-link" onClick={openCoach}>{t("coachOperations")}</button>
-          <button className="asset-solid small" onClick={() => navigate("check")}>{t("freeCheck")}</button>
+          <button className="asset-solid small" onClick={startFullCheck}>{t("freeCheck")}</button>
         </div>
       </header>
 
-      {view === "home" && <Home navigate={navigate} openCoach={openCoach} />}
+      {view === "home" && <Home navigate={(next) => {
+        if (next === "check") setAssessmentMode(ASSESSMENT_MODES.full);
+        navigate(next);
+      }} openCoach={openCoach} />}
       {view === "check" && (
         <HealthAssessmentFlow
-          onComplete={setAssessmentResult}
+          onComplete={(result) => {
+            setAssessmentResult(result);
+            recordJourneyEvent("check_completed", {
+              ...journeyContext,
+              checkId: assessmentMode.id,
+            });
+          }}
           goPassport={() => navigate("passport")}
+          mode={assessmentMode}
+          journeyContext={journeyContext}
         />
       )}
       {view === "passport" && <Passport score={assessmentResult?.totalScore ?? 74} goCheck={() => navigate("check")} goMission={() => navigate("missions")} />}

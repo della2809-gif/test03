@@ -12,6 +12,12 @@ import {
 } from "../features/health-assessment/scoring.ts";
 import type { AssessmentAnswers } from "../features/health-assessment/types.ts";
 import { HEALTH_ASSET_DOMAINS } from "../config/health-assets.ts";
+import {
+  ASSESSMENT_MODES,
+  getAssessmentMode,
+  getQuestionsForMode,
+} from "../features/health-assessment/modes.ts";
+import { recommendJournalContent } from "../lib/journal-content.ts";
 
 const answerAll = (value: number): AssessmentAnswers =>
   Object.fromEntries(
@@ -106,4 +112,22 @@ test("같은 응답은 항상 같은 점수 결과를 만든다", () => {
   const first = calculateAssessmentResult(answers, "2026-07-18T00:00:00.000Z");
   const second = calculateAssessmentResult(answers, "2026-07-18T00:00:00.000Z");
   assert.deepEqual(first, second);
+});
+
+test("주제별 간편 체크는 기존 문항만 재사용한다", () => {
+  const sleepQuestions = getQuestionsForMode(ASSESSMENT_MODES.sleep);
+  assert.equal(sleepQuestions.length, 6);
+  assert.equal(new Set(sleepQuestions.map((question) => question.id)).size, 6);
+  assert.equal(getAssessmentMode("unknown").id, "full");
+});
+
+test("낮은 건강축에 맞는 Journal 콘텐츠를 중복 없이 추천한다", () => {
+  const recommendations = recommendJournalContent([
+    "lifestyle",
+    "energy",
+    "body-composition",
+  ]);
+  assert.equal(recommendations.length, 3);
+  assert.equal(new Set(recommendations.map((item) => item.id)).size, 3);
+  assert.match(recommendations[0].href, /wellset-journal/);
 });

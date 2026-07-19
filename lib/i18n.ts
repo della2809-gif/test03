@@ -7,7 +7,7 @@ export const isLocale = (value: unknown): value is Locale =>
   value === "ko" || value === "en";
 
 const en = {
-  brand: "Health Asset",
+  brand: "WELLSET Health Account",
   healthAccount: "Health Account",
   todayMission: "Today's Mission",
   community: "Community",
@@ -76,7 +76,7 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const ko: Record<MessageKey, string> = {
-  brand: "건강자산",
+  brand: "WELLSET 건강통장",
   healthAccount: "건강통장",
   todayMission: "오늘의 미션",
   community: "커뮤니티",

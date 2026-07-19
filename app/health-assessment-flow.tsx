@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { HEALTH_CHECK_QUESTIONS, LIFESTYLE_QUESTIONS, ASSESSMENT_QUESTIONS } from "../features/health-assessment/questions.ts";
+import Link from "next/link";
+import { HEALTH_CHECK_QUESTIONS, LIFESTYLE_QUESTIONS } from "../features/health-assessment/questions.ts";
+import {
+  ASSESSMENT_MODES,
+  getQuestionsForMode,
+  type AssessmentMode,
+} from "../features/health-assessment/modes.ts";
 import {
   calculateAssessmentResult,
   isAssessmentComplete,
@@ -17,6 +23,11 @@ import {
   type ObjectiveDataAssessment,
 } from "../features/clinical-rules/index.ts";
 import { localizeQuestion } from "../features/health-assessment/i18n.ts";
+import { recommendJournalContent } from "../lib/journal-content.ts";
+import {
+  recordJourneyEvent,
+  type JourneyContext,
+} from "../lib/journey-tracking.ts";
 import { useI18n } from "./i18n-provider";
 
 const STORAGE_KEY = "wellset-health-assessment-v1";
@@ -26,15 +37,25 @@ type AssessmentScreen = "intro" | "questions" | "lifestyle-intro" | "result";
 export function HealthAssessmentFlow({
   onComplete,
   goPassport,
+  mode = ASSESSMENT_MODES.full,
+  journeyContext = {},
 }: {
   onComplete: (result: HealthAssessmentResult) => void;
   goPassport: () => void;
+  mode?: AssessmentMode;
+  journeyContext?: JourneyContext;
 }) {
   const { locale } = useI18n();
+  const assessmentQuestions = useMemo(
+    () => getQuestionsForMode(mode),
+    [mode],
+  );
+  const storageKey = `${STORAGE_KEY}-${mode.id}`;
+  const isFullAssessment = mode.id === "full";
   const [answers, setAnswers] = useState<AssessmentAnswers>(() => {
     if (typeof window === "undefined") return {};
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const saved = window.localStorage.getItem(storageKey);
       return saved ? (JSON.parse(saved) as AssessmentAnswers) : {};
     } catch {
       return {};
@@ -43,10 +64,10 @@ export function HealthAssessmentFlow({
   const [index, setIndex] = useState(() => {
     if (typeof window === "undefined") return 0;
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const saved = window.localStorage.getItem(storageKey);
       if (!saved) return 0;
       const parsed = JSON.parse(saved) as AssessmentAnswers;
-      const firstMissing = ASSESSMENT_QUESTIONS.findIndex(
+      const firstMissing = assessmentQuestions.findIndex(
         (question) => parsed[question.id] === undefined,
       );
       return firstMissing < 0 ? 0 : firstMissing;
@@ -57,53 +78,61 @@ export function HealthAssessmentFlow({
   const [screen, setScreen] = useState<AssessmentScreen>("intro");
   const [result, setResult] = useState<HealthAssessmentResult | null>(null);
 
-  const current = ASSESSMENT_QUESTIONS[index];
+  const current = assessmentQuestions[index];
   const localizedCurrent = current ? localizeQuestion(current, locale) : current;
   const answeredCount = Object.keys(answers).filter((id) =>
-    ASSESSMENT_QUESTIONS.some((question) => question.id === id),
+    assessmentQuestions.some((question) => question.id === id),
   ).length;
+  const currentSectionQuestions = assessmentQuestions.filter(
+    (question) => question.section === current?.section,
+  );
   const sectionLabel = locale === "en"
     ? current?.section === "health-check" ? "Health Check" : "Lifestyle"
     : current?.section === "health-check" ? "건강체크" : "생활습관 진단";
   const sectionNumber =
-    current?.section === "health-check"
-      ? index + 1
-      : index - HEALTH_CHECK_QUESTIONS.length + 1;
-  const sectionTotal =
-    current?.section === "health-check"
-      ? HEALTH_CHECK_QUESTIONS.length
-      : LIFESTYLE_QUESTIONS.length;
+    currentSectionQuestions.findIndex((question) => question.id === current?.id) +
+    1;
+  const sectionTotal = currentSectionQuestions.length;
 
   const progress = useMemo(
-    () => Math.round((answeredCount / ASSESSMENT_QUESTIONS.length) * 100),
-    [answeredCount],
+    () => Math.round((answeredCount / assessmentQuestions.length) * 100),
+    [answeredCount, assessmentQuestions.length],
   );
 
   function start() {
-    if (isAssessmentComplete(answers)) {
+    const modeComplete = assessmentQuestions.every(
+      (question) => answers[question.id] !== undefined,
+    );
+    if (
+      (isFullAssessment && isAssessmentComplete(answers)) ||
+      (!isFullAssessment && modeComplete)
+    ) {
       const completed = calculateAssessmentResult(answers);
       setResult(completed);
       setScreen("result");
       onComplete(completed);
       return;
     }
-    setScreen(
-      index === HEALTH_CHECK_QUESTIONS.length ? "lifestyle-intro" : "questions",
-    );
+    setScreen("questions");
   }
 
   function selectAnswer(value: number) {
     const nextAnswers = { ...answers, [current.id]: value };
     setAnswers(nextAnswers);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextAnswers));
+    window.localStorage.setItem(storageKey, JSON.stringify(nextAnswers));
 
     const nextIndex = index + 1;
-    if (nextIndex === HEALTH_CHECK_QUESTIONS.length) {
+    const nextQuestion = assessmentQuestions[nextIndex];
+    if (
+      isFullAssessment &&
+      current.section === "health-check" &&
+      nextQuestion?.section === "lifestyle"
+    ) {
       setIndex(nextIndex);
       setScreen("lifestyle-intro");
       return;
     }
-    if (nextIndex < ASSESSMENT_QUESTIONS.length) {
+    if (nextIndex < assessmentQuestions.length) {
       setIndex(nextIndex);
       return;
     }
@@ -125,7 +154,7 @@ export function HealthAssessmentFlow({
   }
 
   function restart() {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(storageKey);
     setAnswers({});
     setIndex(0);
     setResult(null);
@@ -135,10 +164,24 @@ export function HealthAssessmentFlow({
   if (screen === "intro") {
     return (
       <main className="assessment-page assessment-intro">
-        <div className="assessment-kicker">WELLSET HEALTH ASSESSMENT</div>
-        <h1>{locale === "en" ? <>Discover your health assets<br />in two simple steps.</> : <>나의 건강자산을<br />두 단계로 확인해보세요.</>}</h1>
-        <p>{locale === "en" ? "Review recent body signals and lifestyle habits to identify 12 health assets and your next priority action." : "최근 몸의 신호와 생활습관을 함께 살펴 12대 건강자산과 오늘의 우선 행동을 안내합니다."}</p>
-        <div className="assessment-stage-grid">
+        <div className="assessment-kicker">
+          {isFullAssessment
+            ? "WELLSET HEALTH ASSESSMENT"
+            : "WELLSET QUICK ASSET CHECK"}
+        </div>
+        <h1>
+          {isFullAssessment ? (
+            locale === "en" ? (
+              <>Discover your health assets<br />in two simple steps.</>
+            ) : (
+              <>나의 건강자산을<br />두 단계로 확인해보세요.</>
+            )
+          ) : (
+            <>{mode.title}<br />지금 간편하게 확인해보세요.</>
+          )}
+        </h1>
+        <p>{isFullAssessment ? (locale === "en" ? "Review recent body signals and lifestyle habits to identify 12 health assets and your next priority action." : mode.description) : mode.description}</p>
+        {isFullAssessment ? <div className="assessment-stage-grid">
           <article>
             <b>1</b><span>STEP 1</span><h2>{locale === "en" ? "Health Check" : "건강체크"}</h2>
             <p>{locale === "en" ? "Review body signals from the past two weeks." : "최근 2주 동안 느낀 몸의 신호를 확인합니다."}</p>
@@ -149,13 +192,19 @@ export function HealthAssessmentFlow({
             <p>{locale === "en" ? "Review nutrition, hydration, activity, sleep and self-care." : "식사, 수분, 운동, 수면과 관리 습관을 확인합니다."}</p>
             <strong>{LIFESTYLE_QUESTIONS.length} {locale === "en" ? "questions · about 2 min" : "문항 · 약 2분"}</strong>
           </article>
-        </div>
-        <div className="assessment-output">
+        </div> : (
+          <div className="mini-assessment-summary">
+            <span>{assessmentQuestions.length}개 문항</span>
+            <strong>{mode.duration}</strong>
+            <p>선택한 건강영역만 살펴보는 부분 점검이며, 전체 12대 건강자산 진단을 대신하지 않습니다.</p>
+          </div>
+        )}
+        {isFullAssessment && <div className="assessment-output">
           <span>완료하면 확인할 수 있어요</span>
           <div><b>건강자산 총점</b><b>12대 영역 점수</b><b>데이터 신뢰도</b><b>우선 행동 3개</b></div>
-        </div>
+        </div>}
         <button className="assessment-primary" onClick={start}>
-          {answeredCount > 0 ? (locale === "en" ? `Continue · ${progress}%` : `이어서 진단하기 · ${progress}%`) : (locale === "en" ? "Start assessment" : "건강진단 시작하기")} <span>→</span>
+          {answeredCount > 0 ? (locale === "en" ? `Continue · ${progress}%` : `이어서 확인하기 · ${progress}%`) : (locale === "en" ? "Start assessment" : isFullAssessment ? "건강진단 시작하기" : "간편 체크 시작하기")} <span>→</span>
         </button>
         <p className="assessment-disclaimer">WELLSET 건강자산 점수는 생활 관리를 위한 웰니스 지표이며 의료 진단이나 치료 효과를 의미하지 않습니다.</p>
       </main>
@@ -188,6 +237,8 @@ export function HealthAssessmentFlow({
         result={result}
         restart={restart}
         goPassport={goPassport}
+        mode={mode}
+        journeyContext={journeyContext}
       />
     );
   }
@@ -206,9 +257,15 @@ export function HealthAssessmentFlow({
         <i style={{ width: `${progress}%` }} />
       </div>
       <div className="assessment-phase-tabs">
-        <span className="active"><b>1</b>건강체크</span>
-        <span className={current.section === "lifestyle" ? "active" : ""}><b>2</b>생활습관</span>
-        <em>전체 {index + 1} / {ASSESSMENT_QUESTIONS.length}</em>
+        {isFullAssessment ? (
+          <>
+            <span className="active"><b>1</b>건강체크</span>
+            <span className={current.section === "lifestyle" ? "active" : ""}><b>2</b>생활습관</span>
+          </>
+        ) : (
+          <span className="active"><b>✓</b>{mode.title}</span>
+        )}
+        <em>전체 {index + 1} / {assessmentQuestions.length}</em>
       </div>
       <section className="assessment-question-card">
         <div className="question-domain">{sectionLabel}</div>
@@ -237,10 +294,14 @@ function AssessmentResult({
   result,
   restart,
   goPassport,
+  mode,
+  journeyContext,
 }: {
   result: HealthAssessmentResult;
   restart: () => void;
   goPassport: () => void;
+  mode: AssessmentMode;
+  journeyContext: JourneyContext;
 }) {
   const [showMethod, setShowMethod] = useState(false);
   const [inputPanel, setInputPanel] = useState<"checkup" | "inbody" | null>(
@@ -273,6 +334,33 @@ function AssessmentResult({
     [result, checkupAssessment, bodyAssessment],
   );
   const enhancedConfidence = displayResult.dataConfidence;
+  const isFullAssessment = mode.id === "full";
+  const modeDomains = useMemo(
+    () =>
+      isFullAssessment
+        ? displayResult.domains
+        : displayResult.domains.filter((domain) =>
+            mode.domainCodes.includes(domain.code),
+          ),
+    [displayResult.domains, isFullAssessment, mode.domainCodes],
+  );
+  const visiblePriorities = useMemo(
+    () => [...modeDomains].sort((a, b) => a.score - b.score).slice(0, 3),
+    [modeDomains],
+  );
+  const displayedScore = isFullAssessment
+    ? displayResult.totalScore
+    : Math.round(
+        modeDomains.reduce((sum, domain) => sum + domain.score, 0) /
+          Math.max(modeDomains.length, 1),
+      );
+  const recommendations = useMemo(
+    () =>
+      recommendJournalContent(
+        visiblePriorities.map((domain) => domain.code),
+      ),
+    [visiblePriorities],
+  );
   const objectiveAssessments = [checkupAssessment, bodyAssessment].filter(
     (item): item is ObjectiveDataAssessment => item !== undefined,
   );
@@ -334,12 +422,22 @@ function AssessmentResult({
     <main className="assessment-result-page">
       <section className="result-hero-new">
         <div>
-          <div className="assessment-kicker">YOUR HEALTH ASSET RESULT</div>
-          <h1>지금의 건강자산은<br /><em>{displayResult.totalScore}점</em>입니다.</h1>
-          <p>점수보다 중요한 것은 앞으로의 변화입니다. 우선순위가 높은 세 영역부터 작은 행동을 시작해보세요.</p>
+          <div className="assessment-kicker">
+            {isFullAssessment
+              ? "YOUR HEALTH ASSET RESULT"
+              : "YOUR QUICK ASSET CHECK"}
+          </div>
+          <h1>{isFullAssessment ? "지금의 건강자산은" : `${mode.title} 결과는`}<br /><em>{displayedScore}점</em>입니다.</h1>
+          <p>{isFullAssessment ? "점수보다 중요한 것은 앞으로의 변화입니다. 우선순위가 높은 세 영역부터 작은 행동을 시작해보세요." : "선택한 건강영역을 간편하게 살펴본 부분 점검 결과입니다. 작은 행동을 시작하고 필요하면 전체 건강진단을 이어가세요."}</p>
           <div className="result-source-scores">
-            <span>건강체크 <b>{result.symptomScore}</b></span>
-            <span>생활습관 <b>{result.lifestyleScore}</b></span>
+            {isFullAssessment ? (
+              <>
+                <span>건강체크 <b>{result.symptomScore}</b></span>
+                <span>생활습관 <b>{result.lifestyleScore}</b></span>
+              </>
+            ) : (
+              <span>간편 체크 <b>{mode.questionIds.length}문항</b></span>
+            )}
             {checkupAssessment?.sourceScore !== null &&
               checkupAssessment?.sourceScore !== undefined && (
                 <span>검진 기준 환산 <b>{checkupAssessment.sourceScore}</b></span>
@@ -348,15 +446,15 @@ function AssessmentResult({
               bodyAssessment?.sourceScore !== undefined && (
                 <span>BMI 기준 환산 <b>{bodyAssessment.sourceScore}</b></span>
               )}
-            <span>완료율 <b>{result.completionRate}%</b></span>
+            <span>체크 완료 <b>100%</b></span>
           </div>
         </div>
-        <div className="result-main-ring" style={{ "--score": `${displayResult.totalScore}%` } as React.CSSProperties}>
-          <div><strong>{displayResult.totalScore}</strong><span>건강자산</span></div>
+        <div className="result-main-ring" style={{ "--score": `${displayedScore}%` } as React.CSSProperties}>
+          <div><strong>{displayedScore}</strong><span>{isFullAssessment ? "건강자산" : "부분 점검"}</span></div>
         </div>
       </section>
 
-      <section className="confidence-panel">
+      {isFullAssessment ? <section className="confidence-panel">
         <div>
           <span>데이터 신뢰도</span>
           <strong>{enhancedConfidence}%</strong>
@@ -364,7 +462,17 @@ function AssessmentResult({
         </div>
         <p><b>{enhancedConfidence === 100 ? "문진과 객관적 자료가 모두 입력됐어요." : "현재 문진 데이터는 충분히 입력됐어요."}</b> 유효한 건강검진 수치는 +20%, BMI는 +15%만큼 분석 근거가 보완됩니다.</p>
         <button onClick={() => setShowMethod(!showMethod)}>{showMethod ? "계산 방식 닫기" : "계산 방식 보기"}</button>
-      </section>
+      </section> : (
+        <section className="confidence-panel mini-result-notice">
+          <div>
+            <span>간편 체크 완료</span>
+            <strong>100%</strong>
+            <i><b style={{ width: "100%" }} /></i>
+          </div>
+          <p><b>{mode.domainCodes.length}개 관련 건강축을 확인했어요.</b> 이 결과는 전체 12대 건강자산 진단이나 의료 진단을 대신하지 않습니다.</p>
+          <Link href="/?view=check&mode=full">전체 건강진단</Link>
+        </section>
+      )}
       {objectiveAssessments.length > 0 && (
         <section className="clinical-reference-panel">
           <div className="clinical-reference-head">
@@ -479,7 +587,7 @@ function AssessmentResult({
       <section className="priority-result">
         <div className="result-section-head"><div><span>TOP PRIORITIES</span><h2>먼저 돌볼 건강자산 3가지</h2></div><p>낮은 점수는 질병을 의미하지 않으며, 생활 관리의 우선순위를 찾기 위한 참고 정보입니다.</p></div>
         <div className="priority-card-grid">
-          {displayResult.priorities.map((domain, index) => (
+          {visiblePriorities.map((domain, index) => (
             <article key={domain.code}>
               <span>PRIORITY {index + 1}</span>
               <strong>{domain.score}</strong>
@@ -491,7 +599,7 @@ function AssessmentResult({
         </div>
       </section>
 
-      <section className="domain-result-section">
+      {isFullAssessment && <section className="domain-result-section">
         <div className="result-section-head"><div><span>12 HEALTH ASSETS</span><h2>12대 건강자산 상세</h2></div><p>차트와 함께 영역명·점수·상태를 텍스트로 제공합니다.</p></div>
         <div className="domain-score-list">
           {displayResult.domains.map((domain) => (
@@ -501,6 +609,35 @@ function AssessmentResult({
               <strong>{domain.score}</strong>
               <span className={domain.score < 60 ? "focus" : ""}>{domain.status}</span>
             </article>
+          ))}
+        </div>
+      </section>}
+
+      <section className="journal-recommendation-section">
+        <div className="result-section-head">
+          <div><span>WELLSET JOURNAL</span><h2>지금 결과에 맞는 읽을거리</h2></div>
+          <p>점수가 낮게 나온 건강축과 바로 실천하기 좋은 주제를 기준으로 추천합니다.</p>
+        </div>
+        <div className="journal-recommendation-grid">
+          {recommendations.map((item) => (
+            <a
+              key={item.id}
+              href={item.href.replace(
+                "/#",
+                "/?utm_source=wellset_health_account&utm_medium=result_recommendation#",
+              )}
+              onClick={() =>
+                recordJourneyEvent("recommended_content_clicked", {
+                  ...journeyContext,
+                  contentId: item.id,
+                })
+              }
+            >
+              <span>{item.category}</span>
+              <h3>{item.title}</h3>
+              <p>{item.summary}</p>
+              <b>WELLSET Journal에서 읽기 →</b>
+            </a>
           ))}
         </div>
       </section>
