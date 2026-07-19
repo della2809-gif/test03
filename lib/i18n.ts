@@ -15,8 +15,8 @@ const en = {
   freeCheck: "Free Health Check",
   customerView: "Customer View",
   heroEyebrow: "AI HEALTH ASSET PLATFORM",
-  heroTitle1: "Health grows",
-  heroTitle2: "with consistent care.",
+  heroTitle1: "Your health is your",
+  heroTitle2: "most valuable asset.",
   heroBody:
     "Check 12 health asset areas in five minutes and build long-term wellbeing through small daily actions.",
   startCheck: "Start 5-min health check",
@@ -84,8 +84,8 @@ const ko: Record<MessageKey, string> = {
   freeCheck: "무료 건강체크",
   customerView: "고객용 화면",
   heroEyebrow: "AI HEALTH ASSET PLATFORM",
-  heroTitle1: "건강도 관리하면",
-  heroTitle2: "복리가 됩니다.",
+  heroTitle1: "건강도 나의 소중한",
+  heroTitle2: "자산입니다.",
   heroBody:
     "혈당대사부터 회복력까지 12대 건강영역을 5분 만에 체크하고, 매일 작은 실천으로 나만의 건강자산을 쌓아보세요.",
   startCheck: "5분 무료 건강체크",
