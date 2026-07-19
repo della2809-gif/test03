@@ -14,6 +14,10 @@ test("공통 번역 키가 한국어와 영어를 반환한다", () => {
   assert.equal(translate("ko", "healthAccount"), "건강통장");
   assert.equal(translate("en", "healthAccount"), "Health Account");
   assert.equal(translate("ko", "heroTitle2"), "자산입니다.");
+  assert.equal(
+    translate("ko", "journeyTitle"),
+    "건강은 관리할수록 커지는 평생의 자산입니다.",
+  );
 });
 
 test("건강체크 질문과 선택지가 영어로 변환된다", () => {

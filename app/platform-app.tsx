@@ -18,9 +18,9 @@ type ConsumerView = "home" | "check" | "passport" | "missions" | "community";
 const journey = [
   ["01", "무료 건강체크", "5분이면 충분해요"],
   ["02", "AI 결과 리포트", "지금의 우선순위 확인"],
-  ["03", "7일 코칭", "작은 실천부터 시작"],
+  ["03", "건강실천플랜", "나만의 7일 시작"],
   ["04", "건강통장", "변화를 한곳에 기록"],
-  ["05", "30일 미션", "포인트로 습관 만들기"],
+  ["05", "건강챌린지", "28일 습관 만들기"],
   ["06", "VIP 대면 코칭", "인바디 측정과 설계"],
   ["07", "함께 관리", "친구·커뮤니티와 지속"],
 ];
@@ -139,9 +139,9 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
     ? [
         ["01", "Free Health Check", "Only five minutes"],
         ["02", "AI Result Report", "See your priorities"],
-        ["03", "7-day Coaching", "Start with small actions"],
+        ["03", "Health Action Plan", "Start your own 7-day plan"],
         ["04", "Health Account", "Record change in one place"],
-        ["05", "30-day Mission", "Build habits with points"],
+        ["05", "Health Challenge", "Build a habit in 28 days"],
         ["06", "VIP In-person Coaching", "Body scan and planning"],
         ["07", "Manage Together", "Continue with community"],
       ]

@@ -24,7 +24,7 @@ const en = {
   noSignup: "No sign-up required",
   instantResult: "Instant results",
   notDiagnosis: "Not a medical diagnosis",
-  journeyTitle: "Turn one check into a lifelong health habit",
+  journeyTitle: "The more you care for your health, the more it grows into a lifelong asset",
   journeyBody:
     "It does not end with a test. AI supports daily action, and a professional coach joins when needed.",
   weeklyCoach: "A health coach that understands you better each week",
@@ -93,7 +93,7 @@ const ko: Record<MessageKey, string> = {
   noSignup: "회원가입 없이 시작",
   instantResult: "결과 즉시 확인",
   notDiagnosis: "의료 진단 아님",
-  journeyTitle: "한 번의 체크가 평생의 건강 습관이 되도록",
+  journeyTitle: "건강은 관리할수록 커지는 평생의 자산입니다.",
   journeyBody:
     "검사에서 끝나지 않습니다. AI가 매일의 실천을 돕고, 중요한 순간에는 전문 코치가 함께합니다.",
   weeklyCoach: "매주 나를 더 잘 아는 건강 코치",
