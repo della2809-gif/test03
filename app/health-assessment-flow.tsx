@@ -24,6 +24,7 @@ import {
   type ObjectiveDataAssessment,
 } from "../features/clinical-rules/index.ts";
 import { extractCheckupValuesFromText } from "../features/clinical-rules/pdf-extraction.ts";
+import { getPdfPasswordErrorKind } from "../features/clinical-rules/pdf-password.ts";
 import { localizeQuestion } from "../features/health-assessment/i18n.ts";
 import { recommendJournalContent } from "../lib/journal-content.ts";
 import {
@@ -314,10 +315,17 @@ function AssessmentResult({
   const [checkupUpload, setCheckupUpload] = useState("");
   const [inbodyUpload, setInbodyUpload] = useState("");
   const [checkupUploadStatus, setCheckupUploadStatus] = useState<
-    "idle" | "processing" | "applied" | "partial" | "failed"
+    | "idle"
+    | "processing"
+    | "password-required"
+    | "applied"
+    | "partial"
+    | "failed"
   >("idle");
   const [checkupUploadMessage, setCheckupUploadMessage] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [protectedPdf, setProtectedPdf] = useState<File | null>(null);
+  const [pdfPassword, setPdfPassword] = useState("");
   const [checkupValues, setCheckupValues] = useState<Record<string, string>>(
     {},
   );
@@ -387,6 +395,76 @@ function AssessmentResult({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function clearProtectedPdf() {
+    setProtectedPdf(null);
+    setPdfPassword("");
+  }
+
+  async function analyzeCheckupPdf(file: File, password?: string) {
+    setCheckupUploadStatus("processing");
+    setCheckupUploadMessage(
+      password
+        ? "입력한 암호로 PDF를 열어 건강검진 수치를 읽고 있습니다."
+        : "PDF에서 건강검진 수치를 읽고 있습니다.",
+    );
+    try {
+      const { extractText, getDocumentProxy } = await import("unpdf");
+      const pdf = await getDocumentProxy(
+        new Uint8Array(await file.arrayBuffer()),
+        password ? { password } : undefined,
+      );
+      try {
+        const extracted = await extractText(pdf, { mergePages: true });
+        const parsed = extractCheckupValuesFromText(extracted.text);
+
+        if (parsed.foundFields.length === 0) {
+          clearProtectedPdf();
+          setCheckupUploadStatus("failed");
+          setCheckupUploadMessage(
+            "문서에서 수치를 찾지 못했습니다. 스캔 이미지 PDF라면 OCR 연결이 필요합니다.",
+          );
+          return;
+        }
+
+        setCheckupValues((current) => ({
+          ...current,
+          ...parsed.values,
+          bpContext: current.bpContext ?? "office",
+        }));
+        setCheckupSaved(true);
+        clearProtectedPdf();
+        const complete = parsed.missingFields.length === 0;
+        setCheckupUploadStatus(complete ? "applied" : "partial");
+        setCheckupUploadMessage(
+          complete
+            ? `건강검진 수치 ${parsed.foundFields.length}개를 자동 반영했습니다.`
+            : `확인된 수치 ${parsed.foundFields.length}개를 자동 반영했습니다. 없는 항목은 점수에서 제외됩니다.`,
+        );
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } finally {
+        await pdf.destroy();
+      }
+    } catch (error) {
+      const passwordError = getPdfPasswordErrorKind(error);
+      if (passwordError) {
+        setProtectedPdf(file);
+        setPdfPassword("");
+        setCheckupUploadStatus("password-required");
+        setCheckupUploadMessage(
+          passwordError === "incorrect"
+            ? "암호가 맞지 않습니다. PDF 암호를 다시 입력해주세요."
+            : "암호로 보호된 PDF입니다. 아래에 PDF 암호를 입력해주세요.",
+        );
+        return;
+      }
+      clearProtectedPdf();
+      setCheckupUploadStatus("failed");
+      setCheckupUploadMessage(
+        "PDF를 읽지 못했습니다. 스캔 이미지로만 된 문서인지 확인해주세요.",
+      );
+    }
+  }
+
   async function selectUpload(type: "checkup" | "inbody", file?: File) {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
@@ -395,52 +473,14 @@ function AssessmentResult({
     }
     setUploadError("");
     if (type === "checkup") {
+      clearProtectedPdf();
       setCheckupUpload(file.name);
       if (
         file.type === "application/pdf" ||
         file.name.toLowerCase().endsWith(".pdf")
       ) {
-        setCheckupUploadStatus("processing");
-        setCheckupUploadMessage("PDF에서 건강검진 수치를 읽고 있습니다.");
-        try {
-          const { extractText, getDocumentProxy } = await import("unpdf");
-          const pdf = await getDocumentProxy(
-            new Uint8Array(await file.arrayBuffer()),
-          );
-          const extracted = await extractText(pdf, { mergePages: true });
-          await pdf.destroy();
-          const parsed = extractCheckupValuesFromText(extracted.text);
-
-          if (parsed.foundFields.length === 0) {
-            setCheckupUploadStatus("failed");
-            setCheckupUploadMessage(
-              "문서에서 수치를 찾지 못했습니다. 스캔 이미지 PDF라면 OCR 연결이 필요합니다.",
-            );
-            return;
-          }
-
-          setCheckupValues((current) => ({
-            ...current,
-            ...parsed.values,
-            bpContext: current.bpContext ?? "office",
-          }));
-          setCheckupSaved(true);
-          const complete = parsed.missingFields.length === 0;
-          setCheckupUploadStatus(complete ? "applied" : "partial");
-          setCheckupUploadMessage(
-            complete
-              ? `건강검진 수치 ${parsed.foundFields.length}개를 자동 반영했습니다.`
-              : `확인된 수치 ${parsed.foundFields.length}개를 자동 반영했습니다. 없는 항목은 점수에서 제외됩니다.`,
-          );
-          window.scrollTo({ top: 0, behavior: "smooth" });
-          return;
-        } catch {
-          setCheckupUploadStatus("failed");
-          setCheckupUploadMessage(
-            "PDF를 읽지 못했습니다. 암호화되었거나 스캔 이미지로만 된 문서인지 확인해주세요.",
-          );
-          return;
-        }
+        await analyzeCheckupPdf(file);
+        return;
       }
       setCheckupUploadStatus("idle");
       setCheckupUploadMessage("");
@@ -619,6 +659,8 @@ function AssessmentResult({
                       ? "자동 반영 완료"
                       : checkupUploadStatus === "partial"
                         ? "확인 수치 반영"
+                        : checkupUploadStatus === "password-required"
+                          ? "암호 입력 필요"
                         : checkupUploadStatus === "failed"
                           ? "자동 인식 실패"
                           : "수치 확인 필요"}
@@ -632,6 +674,48 @@ function AssessmentResult({
               >
                 {checkupUploadMessage}
               </p>
+            )}
+            {checkupUploadStatus === "password-required" && protectedPdf && (
+              <form
+                className="pdf-password-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!pdfPassword) return;
+                  void analyzeCheckupPdf(protectedPdf, pdfPassword);
+                }}
+              >
+                <label htmlFor="checkup-pdf-password">PDF 암호</label>
+                <div>
+                  <input
+                    id="checkup-pdf-password"
+                    type="password"
+                    value={pdfPassword}
+                    onChange={(event) => setPdfPassword(event.target.value)}
+                    placeholder="PDF를 열 때 사용하는 암호"
+                    autoComplete="off"
+                    autoFocus
+                    required
+                  />
+                  <button type="submit">암호로 열기</button>
+                </div>
+                <small>
+                  암호는 이 기기에서 PDF를 여는 데만 사용되며 저장되거나
+                  전송되지 않습니다.
+                </small>
+                <button
+                  type="button"
+                  className="pdf-password-cancel"
+                  onClick={() => {
+                    clearProtectedPdf();
+                    setCheckupUploadStatus("failed");
+                    setCheckupUploadMessage(
+                      "암호 입력을 취소했습니다. 다른 결과지를 업로드하거나 수치를 직접 입력할 수 있습니다.",
+                    );
+                  }}
+                >
+                  취소
+                </button>
+              </form>
             )}
             <div className="objective-entry-buttons">
               <button onClick={() => openInput("checkup")}>
@@ -678,7 +762,7 @@ function AssessmentResult({
           </article>
         </div>
         {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
-        <p className="upload-privacy">🔒 건강검진 PDF는 이 기기에서만 분석하며 서버로 전송하거나 저장하지 않습니다. 인식된 수치는 관련 건강자산 항목과 데이터 신뢰도에 반영됩니다.</p>
+        <p className="upload-privacy">🔒 건강검진 PDF와 입력한 PDF 암호는 이 기기에서만 분석에 사용하며 서버로 전송하거나 저장하지 않습니다. 인식된 수치는 관련 건강자산 항목과 데이터 신뢰도에 반영됩니다.</p>
       </section>
       {showMethod && (
         <section className="method-panel">

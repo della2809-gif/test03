@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { extractCheckupValuesFromText } from "../features/clinical-rules/pdf-extraction.ts";
+import { getPdfPasswordErrorKind } from "../features/clinical-rules/pdf-password.ts";
+
+test("암호 필요와 잘못된 PDF 암호 오류를 구분한다", () => {
+  assert.equal(
+    getPdfPasswordErrorKind({
+      name: "PasswordException",
+      code: 1,
+      message: "No password given",
+    }),
+    "required",
+  );
+  assert.equal(
+    getPdfPasswordErrorKind({
+      name: "PasswordException",
+      code: 2,
+      message: "Incorrect Password",
+    }),
+    "incorrect",
+  );
+  assert.equal(
+    getPdfPasswordErrorKind(new Error("Invalid PDF structure")),
+    null,
+  );
+});
 
 test("건강검진 PDF 텍스트에서 주요 수치를 추출한다", () => {
   const result = extractCheckupValuesFromText(`
