@@ -97,12 +97,33 @@ const LABELS: Record<
 };
 
 function normalizePdfText(text: string): string {
-  return text
+  const normalized = text
     .normalize("NFKC")
     .replace(/(\d),(?=\d{3}\b)/g, "$1")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/\r/g, "");
+  const ocrLabelFixes: Array<[RegExp, string]> = [
+    [/허[ \t]*리[ \t]*둘[ \t]*레/gi, "허리둘레"],
+    [/혈[ \t]*색[ \t]*소/gi, "혈색소"],
+    [/공[ \t]*복[ \t]*혈[ \t]*당/gi, "공복혈당"],
+    [/당[ \t]*화[ \t]*혈[ \t]*색[ \t]*소/gi, "당화혈색소"],
+    [/총[ \t]*콜[ \t]*레[ \t]*스[ \t]*테[ \t]*롤/gi, "총콜레스테롤"],
+    [/중[ \t]*성[ \t]*지[ \t]*방/gi, "중성지방"],
+    [/감[ \t]*마[ \t]*지[ \t]*티[ \t]*피/gi, "감마지티피"],
+    [/혈[ \t]*청[ \t]*크[ \t]*레[ \t]*아[ \t]*티[ \t]*닌/gi, "혈청크레아티닌"],
+    [
+      /신[ \t]*사[ \t]*구[ \t]*체[ \t]*여[ \t]*과[ \t]*율/gi,
+      "신사구체여과율",
+    ],
+    [/수[ \t]*축[ \t]*기[ \t]*혈[ \t]*압/gi, "수축기혈압"],
+    [/이[ \t]*완[ \t]*기[ \t]*혈[ \t]*압/gi, "이완기혈압"],
+  ];
+  return ocrLabelFixes.reduce(
+    (result, [pattern, replacement]) =>
+      result.replace(pattern, replacement),
+    normalized,
+  );
 }
 
 function validValue(id: CheckupFieldId, raw: string): string | undefined {

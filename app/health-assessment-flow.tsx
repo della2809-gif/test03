@@ -317,13 +317,16 @@ function AssessmentResult({
   const [checkupUploadStatus, setCheckupUploadStatus] = useState<
     | "idle"
     | "processing"
+    | "ocr"
     | "password-required"
+    | "review-required"
     | "applied"
     | "partial"
     | "failed"
   >("idle");
   const [checkupUploadMessage, setCheckupUploadMessage] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [protectedPdf, setProtectedPdf] = useState<File | null>(null);
   const [pdfPassword, setPdfPassword] = useState("");
   const [checkupValues, setCheckupValues] = useState<Record<string, string>>(
@@ -400,6 +403,83 @@ function AssessmentResult({
     setPdfPassword("");
   }
 
+  function applyOcrResult(
+    text: string,
+    options: { pagesProcessed?: number; truncated?: boolean } = {},
+  ) {
+    const parsed = extractCheckupValuesFromText(text);
+    if (parsed.foundFields.length === 0) {
+      clearProtectedPdf();
+      setCheckupUploadStatus("failed");
+      setCheckupUploadMessage(
+        "OCR로 문자를 읽었지만 건강검진 수치를 찾지 못했습니다. 선명한 원본을 다시 촬영하거나 수치를 직접 입력해주세요.",
+      );
+      return false;
+    }
+
+    setCheckupValues((current) => ({
+      ...current,
+      ...parsed.values,
+      bpContext: current.bpContext ?? "office",
+    }));
+    setCheckupSaved(false);
+    clearProtectedPdf();
+    setCheckupUploadStatus("review-required");
+    const pageNotice = options.pagesProcessed
+      ? ` ${options.pagesProcessed}쪽을 확인했습니다.`
+      : "";
+    const truncationNotice = options.truncated
+      ? " 첫 8쪽까지만 인식했으므로 나머지 수치는 직접 확인해주세요."
+      : "";
+    setCheckupUploadMessage(
+      `OCR가 수치 ${parsed.foundFields.length}개를 찾았습니다.${pageNotice}${truncationNotice} 정확성을 확인한 뒤 입력을 완료해주세요.`,
+    );
+    setInputPanel("checkup");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return true;
+  }
+
+  async function analyzeCheckupImage(file: File) {
+    setCheckupUploadStatus("ocr");
+    setOcrProgress(0);
+    setCheckupUploadMessage(
+      "이미지에서 한국어·영문 검사항목과 수치를 인식하고 있습니다.",
+    );
+    try {
+      const { recognizeHealthDocumentImage } = await import(
+        "../features/clinical-rules/client-ocr.ts"
+      );
+      const text = await recognizeHealthDocumentImage(file, (progress) => {
+        setOcrProgress(progress.percent);
+        setCheckupUploadMessage(progress.message);
+      });
+      applyOcrResult(text);
+    } catch {
+      setCheckupUploadStatus("failed");
+      setCheckupUploadMessage(
+        "OCR를 실행하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도하거나 수치를 직접 입력해주세요.",
+      );
+    }
+  }
+
+  async function analyzeScannedPdf(
+    pdf: Awaited<ReturnType<(typeof import("unpdf"))["getDocumentProxy"]>>,
+  ) {
+    setCheckupUploadStatus("ocr");
+    setOcrProgress(0);
+    setCheckupUploadMessage(
+      "스캔 PDF를 이미지로 변환해 OCR로 읽고 있습니다. 잠시 기다려주세요.",
+    );
+    const { recognizeHealthDocumentPdf } = await import(
+      "../features/clinical-rules/client-ocr.ts"
+    );
+    const result = await recognizeHealthDocumentPdf(pdf, (progress) => {
+      setOcrProgress(progress.percent);
+      setCheckupUploadMessage(progress.message);
+    });
+    return applyOcrResult(result.text, result);
+  }
+
   async function analyzeCheckupPdf(file: File, password?: string) {
     setCheckupUploadStatus("processing");
     setCheckupUploadMessage(
@@ -418,11 +498,7 @@ function AssessmentResult({
         const parsed = extractCheckupValuesFromText(extracted.text);
 
         if (parsed.foundFields.length === 0) {
-          clearProtectedPdf();
-          setCheckupUploadStatus("failed");
-          setCheckupUploadMessage(
-            "문서에서 수치를 찾지 못했습니다. 스캔 이미지 PDF라면 OCR 연결이 필요합니다.",
-          );
+          await analyzeScannedPdf(pdf);
           return;
         }
 
@@ -460,7 +536,7 @@ function AssessmentResult({
       clearProtectedPdf();
       setCheckupUploadStatus("failed");
       setCheckupUploadMessage(
-        "PDF를 읽지 못했습니다. 스캔 이미지로만 된 문서인지 확인해주세요.",
+        "PDF 또는 OCR 처리를 완료하지 못했습니다. 인터넷 연결과 파일 상태를 확인한 뒤 다시 시도해주세요.",
       );
     }
   }
@@ -482,8 +558,8 @@ function AssessmentResult({
         await analyzeCheckupPdf(file);
         return;
       }
-      setCheckupUploadStatus("idle");
-      setCheckupUploadMessage("");
+      await analyzeCheckupImage(file);
+      return;
     } else {
       setInbodyUpload(file.name);
     }
@@ -514,6 +590,12 @@ function AssessmentResult({
             if (isCheckup) {
               setCheckupValues(values);
               setCheckupSaved(true);
+              if (checkupUploadStatus === "review-required") {
+                setCheckupUploadStatus("applied");
+                setCheckupUploadMessage(
+                  "OCR로 인식한 수치를 확인해 건강자산 점수와 데이터 신뢰도에 반영했습니다.",
+                );
+              }
             } else {
               setInbodyValues(values);
               setInbodySaved(true);
@@ -655,12 +737,16 @@ function AssessmentResult({
                 <span className={checkupUploadStatus}>
                   {checkupUploadStatus === "processing"
                     ? "분석 중"
+                    : checkupUploadStatus === "ocr"
+                      ? `OCR ${ocrProgress}%`
                     : checkupUploadStatus === "applied"
                       ? "자동 반영 완료"
                       : checkupUploadStatus === "partial"
                         ? "확인 수치 반영"
                         : checkupUploadStatus === "password-required"
                           ? "암호 입력 필요"
+                        : checkupUploadStatus === "review-required"
+                          ? "수치 확인 필요"
                         : checkupUploadStatus === "failed"
                           ? "자동 인식 실패"
                           : "수치 확인 필요"}
@@ -674,6 +760,19 @@ function AssessmentResult({
               >
                 {checkupUploadMessage}
               </p>
+            )}
+            {checkupUploadStatus === "ocr" && (
+              <div
+                className="ocr-progress"
+                role="progressbar"
+                aria-label="건강검진 OCR 진행률"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={ocrProgress}
+              >
+                <i><b style={{ width: `${ocrProgress}%` }} /></i>
+                <span>{ocrProgress}%</span>
+              </div>
             )}
             {checkupUploadStatus === "password-required" && protectedPdf && (
               <form
@@ -762,7 +861,7 @@ function AssessmentResult({
           </article>
         </div>
         {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
-        <p className="upload-privacy">🔒 건강검진 PDF와 입력한 PDF 암호는 이 기기에서만 분석에 사용하며 서버로 전송하거나 저장하지 않습니다. 인식된 수치는 관련 건강자산 항목과 데이터 신뢰도에 반영됩니다.</p>
+        <p className="upload-privacy">🔒 건강검진 이미지·PDF와 입력한 PDF 암호는 이 기기에서만 분석에 사용하며 서버로 전송하거나 저장하지 않습니다. OCR 인식 수치는 확인 후 관련 건강자산 항목과 데이터 신뢰도에 반영됩니다.</p>
       </section>
       {showMethod && (
         <section className="method-panel">

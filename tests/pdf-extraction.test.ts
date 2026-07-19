@@ -81,6 +81,26 @@ test("분리 표기된 혈압과 영문 검사명을 인식한다", () => {
   assert.equal(result.values.triglycerides, "90");
 });
 
+test("OCR이 한글 검사명 사이에 넣은 공백을 정규화한다", () => {
+  const result = extractCheckupValuesFromText(`
+    허 리 둘 레 84.2 cm
+    혈 색 소 12.8 g/dL
+    공 복 혈 당 91 mg/dL
+    총 콜 레 스 테 롤 176 mg/dL
+    감 마 지 티 피 22 U/L
+    혈 청 크 레 아 티 닌 0.9 mg/dL
+    신 사 구 체 여 과 율 98 mL/min/1.73㎡
+  `);
+
+  assert.equal(result.values.waist, "84.2");
+  assert.equal(result.values.hemoglobin, "12.8");
+  assert.equal(result.values.fastingGlucose, "91");
+  assert.equal(result.values.totalCholesterol, "176");
+  assert.equal(result.values.ggt, "22");
+  assert.equal(result.values.creatinine, "0.9");
+  assert.equal(result.values.egfr, "98");
+});
+
 test("임상 입력 범위를 벗어난 오인식 값은 제외한다", () => {
   const result = extractCheckupValuesFromText(`
     공복혈당 20260719 mg/dL
