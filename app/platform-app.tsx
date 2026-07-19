@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import type { HealthAssessmentResult } from "../features/health-assessment/types.ts";
 import { HealthAssessmentFlow } from "./health-assessment-flow";
 import { HealthCoachingApp } from "./health-coaching-app";
@@ -140,7 +141,13 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
   return (
     <div className="asset-app">
       <header className="asset-header">
-        <button className="asset-logo" onClick={() => navigate("home")}><span>H+</span>{t("brand")}</button>
+        <button className="asset-logo" onClick={() => navigate("home")} aria-label="WELLSETS 홈">
+          <span className="asset-brand-mark"><Image src="/wellsets-mark.png" alt="" width={512} height={512} priority /></span>
+          <span className="asset-brand-type">
+            <small>건강자산관리</small>
+            <strong>WELLSETS</strong>
+          </span>
+        </button>
         <nav aria-label="건강자산 메뉴">
           <a href="https://wellset-journal.fluffy-cow-3410.chatgpt.site/">
             WELLSET Journal
@@ -179,7 +186,13 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
       {view === "community" && <Community showToast={showToast} />}
 
       <footer className="asset-footer">
-        <div className="asset-logo inverse"><span>H+</span>{t("brand")}</div>
+        <div className="asset-logo inverse" aria-label="WELLSETS">
+          <span className="asset-brand-mark"><Image src="/wellsets-mark.png" alt="" width={512} height={512} /></span>
+          <span className="asset-brand-type">
+            <small>건강자산관리</small>
+            <strong>WELLSETS</strong>
+          </span>
+        </div>
         <p>{t("footerCopy")}</p>
         <button onClick={openCoach}>코치·파트너 운영 화면 →</button>
       </footer>
