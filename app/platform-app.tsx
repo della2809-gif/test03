@@ -141,11 +141,10 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
   return (
     <div className="asset-app">
       <header className="asset-header">
-        <button className="asset-logo" onClick={() => navigate("home")} aria-label="WELLSETS 홈">
+        <button className="asset-logo" onClick={() => navigate("home")} aria-label="건강자산 홈">
           <span className="asset-brand-mark"><Image src="/wellsets-mark.png" alt="" width={512} height={512} priority /></span>
           <span className="asset-brand-type">
-            <small>건강자산관리</small>
-            <strong>WELLSETS</strong>
+            <strong>건강자산</strong>
           </span>
         </button>
         <nav aria-label="건강자산 메뉴">
@@ -186,11 +185,10 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
       {view === "community" && <Community showToast={showToast} />}
 
       <footer className="asset-footer">
-        <div className="asset-logo inverse" aria-label="WELLSETS">
+        <div className="asset-logo inverse" aria-label="건강자산">
           <span className="asset-brand-mark"><Image src="/wellsets-mark.png" alt="" width={512} height={512} /></span>
           <span className="asset-brand-type">
-            <small>건강자산관리</small>
-            <strong>WELLSETS</strong>
+            <strong>건강자산</strong>
           </span>
         </div>
         <p>{t("footerCopy")}</p>
