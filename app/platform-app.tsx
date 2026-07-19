@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { HealthAssessmentResult } from "../features/health-assessment/types.ts";
 import { HealthAssessmentFlow } from "./health-assessment-flow";
 import { HealthCoachingApp } from "./health-coaching-app";
@@ -16,13 +17,13 @@ import {
 type ConsumerView = "home" | "check" | "passport" | "missions" | "community";
 
 const journey = [
-  ["01", "무료 건강체크", "5분이면 충분해요"],
-  ["02", "AI 결과 리포트", "지금의 우선순위 확인"],
+  ["01", "건강자산 진단", "5분 건강체크"],
+  ["02", "AI 건강리포트", "12개 건강능력 분석"],
   ["03", "건강실천플랜", "나만의 7일 시작"],
-  ["04", "건강통장", "변화를 한곳에 기록"],
+  ["04", "건강통장", "매일 건강자산 기록"],
   ["05", "건강챌린지", "28일 습관 만들기"],
-  ["06", "VIP 대면 코칭", "인바디 측정과 설계"],
-  ["07", "함께 관리", "친구·커뮤니티와 지속"],
+  ["06", "전문가 코칭", "AI + 전문가 피드백"],
+  ["07", "건강 허브", "가족과 함께 성장"],
 ];
 
 const missionsSeed = [
@@ -77,7 +78,7 @@ function PlatformRoot() {
 }
 
 function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [view, setView] = useState<ConsumerView>("home");
   const [assessmentResult, setAssessmentResult] =
     useState<HealthAssessmentResult | null>(null);
@@ -99,8 +100,12 @@ function ConsumerPlatform({ openCoach }: { openCoach: () => void }) {
   return (
     <div className="asset-app">
       <header className="asset-header">
-        <button className="asset-logo" onClick={() => navigate("home")}><span>H+</span>{t("brand")}</button>
+        <button className="asset-logo" onClick={() => navigate("home")}>
+          <span>H+</span>
+          <strong>{t("brand")}<small>AI HEALTH ASSET PLATFORM</small></strong>
+        </button>
         <nav aria-label="건강자산 메뉴">
+          <button className={view === "home" ? "active" : ""} onClick={() => navigate("home")}>{locale === "en" ? "Home" : "건강홈"}</button>
           <button className={view === "passport" ? "active" : ""} onClick={() => navigate("passport")}>{t("healthAccount")}</button>
           <button className={view === "missions" ? "active" : ""} onClick={() => navigate("missions")}>{t("todayMission")}</button>
           <button className={view === "community" ? "active" : ""} onClick={() => navigate("community")}>{t("community")}</button>
@@ -137,17 +142,36 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
   const { locale, t } = useI18n();
   const localizedJourney = locale === "en"
     ? [
-        ["01", "Free Health Check", "Only five minutes"],
-        ["02", "AI Result Report", "See your priorities"],
+        ["01", "Health Asset Check", "Five-minute check"],
+        ["02", "AI Health Report", "Analyze 12 health abilities"],
         ["03", "Health Action Plan", "Start your own 7-day plan"],
-        ["04", "Health Account", "Record change in one place"],
+        ["04", "Health Account", "Record health assets daily"],
         ["05", "Health Challenge", "Build a habit in 28 days"],
-        ["06", "VIP In-person Coaching", "Body scan and planning"],
-        ["07", "Manage Together", "Continue with community"],
+        ["06", "Expert Coaching", "AI + expert feedback"],
+        ["07", "Health Hub", "Grow together with family"],
       ]
     : journey;
+  const journeyIcons = ["▣", "◉", "◎", "▤", "♡", "♙", "◫"];
+  const proofItems = locale === "en"
+    ? ["12 health abilities", "AI personalized report", "Coach & community", "Lifelong care"]
+    : ["12개 건강능력 진단", "AI 맞춤 리포트", "코치 & 커뮤니티", "평생 건강관리"];
+  const featureItems = locale === "en"
+    ? [
+        ["✥", "Structured AI analysis", "Analyze 12 health abilities"],
+        ["♧", "Personal plans & missions", "A practical guide made for me"],
+        ["▣", "Smarter with every record", "AI provides increasingly precise feedback"],
+        ["♙", "Care together with family", "Share health assets with loved ones"],
+        ["◌", "Connected health products", "Guides to the right products and information"],
+      ]
+    : [
+        ["✥", "체계적인 AI 분석", "12개 건강능력 기반 분석"],
+        ["♧", "맞춤 플랜 & 미션", "나에게 꼭 맞는 실천 가이드"],
+        ["▣", "기록할수록 더 스마트하게", "AI가 더 정확한 피드백 제공"],
+        ["♙", "가족과 함께 관리", "소중한 사람과 건강 자산을 공유"],
+        ["◌", "건강한 소비 연결", "필요한 제품 정보와 가이드 제공"],
+      ];
   return (
-    <main>
+    <main className="home-redesign">
       <section className="asset-hero">
         <div className="asset-hero-copy">
           <div className="asset-eyebrow">{t("heroEyebrow")}</div>
@@ -158,44 +182,80 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
             <button className="asset-ghost" onClick={() => navigate("passport")}>{t("previewAccount")}</button>
           </div>
           <div className="asset-proof">
-            <span>✓ {t("noSignup")}</span><span>✓ {t("instantResult")}</span><span>✓ {t("notDiagnosis")}</span>
+            {proofItems.map((item, index) => <span key={item}><i>{["✥", "▣", "♙", "◫"][index]}</i><b>{item}</b></span>)}
           </div>
         </div>
         <div className="asset-hero-visual" aria-label="건강자산 리포트 미리보기">
-          <div className="asset-report-top"><span>나의 건강자산</span><b>이번 주 +4</b></div>
-          <div className="asset-score-ring"><div><strong>74</strong><span>양호</span></div></div>
-          <div className="asset-mini-bars">
-            {[["회복력", 68], ["혈당대사", 72], ["에너지", 81]].map(([label, value]) => (
-              <div key={label}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><strong>{value}</strong></div>
-            ))}
+          <div className="asset-report-top"><span>{locale === "en" ? "My health assets" : "나의 건강자산"}</span><b>{locale === "en" ? "This week +6" : "이번 주 +6"}</b></div>
+          <div className="asset-report-body">
+            <div className="asset-score-summary">
+              <div className="asset-score-ring"><div><strong>74</strong><span>/100</span></div></div>
+              <b>{locale === "en" ? "Health asset score" : "건강자산 점수"}</b>
+              <em>{locale === "en" ? "Average ↑ 6" : "보통 ↑ 6점"}</em>
+            </div>
+            <div className="asset-mini-bars">
+              {[
+                [locale === "en" ? "Immunity" : "면역방어", 82],
+                [locale === "en" ? "Glucose" : "혈당균형", 72],
+                [locale === "en" ? "Energy" : "에너지", 68],
+                [locale === "en" ? "Recovery" : "수면회복", 78],
+                [locale === "en" ? "Metabolism" : "근육·대사", 65],
+              ].map(([label, value]) => (
+                <div key={label}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><strong>{value}</strong></div>
+              ))}
+              <button onClick={() => navigate("passport")}>{locale === "en" ? "View all ›" : "전체 보기 ›"}</button>
+            </div>
           </div>
-          <div className="asset-ai-note"><span>AI</span><p><b>오늘의 한 가지</b>저녁 식사 후 10분만 걸어보세요.</p></div>
+          <div className="asset-ai-note"><span>↗</span><p><b>{locale === "en" ? "Today's one thing" : "오늘의 한 가지"}</b>{locale === "en" ? "Take a 10-minute walk after lunch." : "점심 식후 10분 걷기 실천해보세요."}</p><strong>+30P</strong></div>
         </div>
         <div className="asset-float float-one">30일 연속 기록 <b>12일째</b></div>
-        <div className="asset-float float-two">건강 포인트 <b>+30P</b></div>
+        <div className="hero-botanical" aria-hidden="true"><i /><i /><i /><i /><i /></div>
       </section>
 
       <section className="asset-section journey-section">
-        <div className="asset-section-head"><div><span>THE HEALTH ASSET JOURNEY</span><h2>{t("journeyTitle")}</h2></div><p>{t("journeyBody")}</p></div>
+        <button className="journey-arrow" aria-label={locale === "en" ? "Previous journey step" : "이전 건강 여정 단계"}>‹</button>
+        <div className="journey-heading"><h2>{t("journeyTitle")}</h2></div>
         <div className="journey-grid">
-          {localizedJourney.map(([no, title, text], index) => <div className={index === 0 ? "featured" : ""} key={no}><b>{no}</b><span>{title}</span><small>{text}</small></div>)}
+          {localizedJourney.map(([no, title, text], index) => <div className={index === 0 ? "featured" : ""} key={no}><i aria-hidden="true">{journeyIcons[index]}</i><b>{no}</b><span>{title}</span><small>{text}</small></div>)}
         </div>
+        <button className="journey-arrow" aria-label={locale === "en" ? "Next journey step" : "다음 건강 여정 단계"}>›</button>
       </section>
 
-      <section className="asset-section asset-two-col">
-        <div className="weekly-card">
+      <section className="asset-section home-showcase">
+        <article className="weekly-card home-showcase-card">
+          <Image src="/wellness-interior.jpg" alt="" width={1200} height={900} sizes="(max-width: 640px) 100vw, 145px" />
+          <div>
           <div className="asset-eyebrow">WEEKLY AI COACH</div>
           <h2>{t("weeklyCoach")}</h2>
           <p>{t("weeklyCoachBody")}</p>
           <div className="coach-chat">
-            <div className="chat-ai"><b>AI 코치</b><p>이번 주 수면 점수가 6점 올랐어요. 다만 늦은 저녁 식사 다음 날 피로도가 높았습니다.</p></div>
-            <div className="chat-action"><span>이번 주 작은 실천</span><strong>저녁 식사를 평소보다 30분 일찍</strong><button onClick={() => navigate("missions")}>미션에 담기 +</button></div>
+            <div className="chat-ai"><b>AI 코치</b><p>이번 주 수면 점수가 향상됐어요! 이 좋은 흐름을 계속 유지해보세요.</p></div>
+            <div className="chat-action"><span>이번 주 목표 실천</span><strong>저녁 11시 스마트폰 30분 줄이기</strong><b>+100P</b></div>
           </div>
-        </div>
-        <div className="passport-promo">
-          <div className="passport-cover"><span>HEALTH ASSET ACCOUNT</span><b>{locale === "en" ? "Health Account" : <>건강<br />통장</>}</b><small>{locale === "en" ? "Your change becomes an asset" : "나의 변화가 자산이 되는 기록"}</small><i>H+</i></div>
-          <div><div className="asset-eyebrow">MY HEALTH ACCOUNT</div><h2>{t("accountPromoTitle")}</h2><p>{t("accountPromoBody")}</p><button className="asset-text-link" onClick={() => navigate("passport")}>{t("exploreAccount")}</button></div>
-        </div>
+          </div>
+        </article>
+        <article className="passport-promo home-showcase-card">
+          <div>
+            <div className="asset-eyebrow">MY HEALTH ACCOUNT</div>
+            <h2>{locale === "en" ? <>See every change<br />in your Health Account</> : <>건강통장으로<br />나의 변화를 한눈에</>}</h2>
+            <p>{locale === "en" ? "Collect weight, body composition and lifestyle records in one place." : "체중, 인바디, 생활습관, 미션까지 모든 기록을 한 곳에."}</p>
+            <button className="asset-text-link" onClick={() => navigate("passport")}>{locale === "en" ? "Open Health Account →" : "건강통장 바로가기 →"}</button>
+          </div>
+          <div className="passport-cover"><span>HEALTH ACCOUNT</span><b>{locale === "en" ? "Health Account" : "건강통장"}</b><small>{locale === "en" ? "This month's change" : "이번 달 변화"}</small><strong>+ 8점</strong><i>＋</i></div>
+        </article>
+        <article className="community-card home-showcase-card">
+          <div className="community-copy">
+            <span>TOGETHER</span><h3>{locale === "en" ? <>A health community<br />that lasts longer together</> : <>혼자보다 오래 가는<br />건강 커뮤니티</>}</h3>
+            <p>{locale === "en" ? "Build supportive health habits and grow together." : "서로 응원하고, 함께 성장하는 건강 습관을 만들어보세요."}</p>
+            <div><b>#챌린지</b><b>#미션</b><b>#기록공유</b><b>#코치피드백</b></div>
+            <button onClick={() => navigate("community")}>{locale === "en" ? "Explore community →" : "커뮤니티 둘러보기 →"}</button>
+          </div>
+          <figure><Image src="/wellness-community.jpg" alt={locale === "en" ? "Friends enjoying time together" : "함께 즐거운 시간을 보내는 친구들"} width={1200} height={900} sizes="(max-width: 640px) 100vw, 220px" /><figcaption>{locale === "en" ? "Better together!" : "함께라서 더 즐거워요!"}<span>♥ 128</span></figcaption></figure>
+        </article>
+      </section>
+
+      <section className="home-feature-strip" aria-label={locale === "en" ? "Platform benefits" : "플랫폼 주요 특징"}>
+        {featureItems.map(([icon, title, text]) => <div key={title}><i>{icon}</i><p><b>{title}</b><span>{text}</span></p></div>)}
       </section>
 
       <section className="asset-vip">
@@ -204,14 +264,6 @@ function Home({ navigate, openCoach }: { navigate: (view: ConsumerView) => void;
           <button className="asset-light" onClick={() => navigate("check")}>{t("startFree")}</button>
         </div>
         <div className="vip-ticket"><span>VIP HEALTH SESSION</span><strong>90</strong><em>MINUTES</em><hr /><p>BODY COMPOSITION<br />+ PERSONAL COACHING</p><small>사전 예약제로 운영됩니다</small></div>
-      </section>
-
-      <section className="asset-section reward-community">
-        <div className="reward-copy"><div className="asset-eyebrow">HEALTH REWARD</div><h2>건강 행동이<br />혜택으로 돌아오게</h2><p>출석, 미션, 측정, 친구 초대 활동으로 포인트를 모아 코칭과 제휴 혜택에 사용할 수 있어요.</p><button className="asset-text-link" onClick={() => navigate("missions")}>오늘의 미션 보기 →</button></div>
-        <div className="reward-stack">
-          <div><span>오늘의 미션 완료</span><b>+30 P</b></div><div><span>7일 연속 체크인</span><b>+100 P</b></div><div><span>친구와 함께 시작</span><b>+200 P</b></div>
-        </div>
-        <div className="community-card"><span>TOGETHER</span><h3>혼자보다 오래 가는<br />건강 커뮤니티</h3><div><b># 혈당관리</b><b># 갱년기</b><b># 근육증가</b><b># 장건강</b></div><button onClick={() => navigate("community")}>내 그룹 찾기 →</button></div>
       </section>
 
       <section className="asset-final-cta"><span>MY HEALTH, MY ASSET</span><h2>오늘의 5분이<br />내일의 건강자산이 됩니다.</h2><button className="asset-solid light-solid" onClick={() => navigate("check")}>무료 건강체크 시작하기 →</button><button className="operator-link" onClick={openCoach}>코치이신가요? 운영 화면 보기</button></section>
