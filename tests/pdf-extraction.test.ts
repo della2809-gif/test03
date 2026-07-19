@@ -5,24 +5,38 @@ import { extractCheckupValuesFromText } from "../features/clinical-rules/pdf-ext
 test("건강검진 PDF 텍스트에서 주요 수치를 추출한다", () => {
   const result = extractCheckupValuesFromText(`
     종합 건강검진 결과
+    허리둘레 81.5 cm
     혈압 128 / 82 mmHg
+    혈색소 13.4 g/dL
     공복혈당 96 mg/dL
     당화혈색소(HbA1c) 5.6 %
+    총콜레스테롤 188 mg/dL
     LDL 콜레스테롤 112 mg/dL
     HDL 콜레스테롤 54 mg/dL
     중성지방 145 mg/dL
+    AST(SGOT) 28 U/L
     ALT(SGPT) 31 U/L
+    감마지티피 24 U/L
+    혈청 크레아티닌 0.8 mg/dL
+    신사구체여과율(eGFR) 102 mL/min/1.73㎡
   `);
 
   assert.deepEqual(result.values, {
+    waist: "81.5",
     systolic: "128",
     diastolic: "82",
+    hemoglobin: "13.4",
     fastingGlucose: "96",
     hba1c: "5.6",
+    totalCholesterol: "188",
     ldl: "112",
     hdl: "54",
     triglycerides: "145",
+    ast: "28",
     alt: "31",
+    ggt: "24",
+    creatinine: "0.8",
+    egfr: "102",
   });
   assert.equal(result.missingFields.length, 0);
 });

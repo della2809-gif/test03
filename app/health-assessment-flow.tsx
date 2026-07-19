@@ -20,6 +20,7 @@ import {
   applyObjectiveData,
   assessBodyCompositionData,
   assessCheckupData,
+  type MetricAssessment,
   type ObjectiveDataAssessment,
 } from "../features/clinical-rules/index.ts";
 import { extractCheckupValuesFromText } from "../features/clinical-rules/pdf-extraction.ts";
@@ -369,6 +370,17 @@ function AssessmentResult({
   const objectiveAssessments = [checkupAssessment, bodyAssessment].filter(
     (item): item is ObjectiveDataAssessment => item !== undefined,
   );
+  const objectiveMetricsByDomain = useMemo(() => {
+    const mapped: Record<string, MetricAssessment[]> = {};
+    for (const assessment of [checkupAssessment, bodyAssessment]) {
+      for (const item of assessment?.metrics ?? []) {
+        for (const domainCode of item.domains) {
+          mapped[domainCode] = [...(mapped[domainCode] ?? []), item];
+        }
+      }
+    }
+    return mapped;
+  }, [checkupAssessment, bodyAssessment]);
 
   function openInput(type: "checkup" | "inbody") {
     setInputPanel(type);
@@ -555,6 +567,14 @@ function AssessmentResult({
                     {item.bandLabel}
                   </span>
                   <p>{item.interpretation}</p>
+                  <div className="clinical-domain-links">
+                    <b>{item.wellnessScore === null ? "관련 항목 참고" : "건강자산 점수 반영"}</b>
+                    {item.domains.map((code) => (
+                      <span key={code}>
+                        {displayResult.domains.find((domain) => domain.code === code)?.name ?? code}
+                      </span>
+                    ))}
+                  </div>
                 </article>
               )),
             )}
@@ -563,10 +583,13 @@ function AssessmentResult({
             <p className="clinical-exclusion" key={notice}>※ {notice}</p>
           ))}
           <div className="clinical-source-links">
+            <a href="https://law.go.kr/LSW/flDownload.do?bylClsCd=200203&flNm=%5B%EB%B3%84%EC%A7%80+6%5D+%EC%9D%BC%EB%B0%98%EA%B1%B4%EA%B0%95%EA%B2%80%EC%A7%84+%EA%B2%B0%EA%B3%BC%ED%86%B5%EB%B3%B4%EC%84%9C&flSeq=160922671" target="_blank" rel="noreferrer">2026 국가건강검진 기준</a>
             <a href="https://www.e-dmj.org/upload/pdf/dmj-2024-0249.pdf" target="_blank" rel="noreferrer">대한당뇨병학회</a>
             <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9930285/" target="_blank" rel="noreferrer">대한고혈압학회</a>
             <a href="https://www.lipid.or.kr/dtp/diagnosis.php" target="_blank" rel="noreferrer">한국지질·동맥경화학회</a>
             <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10088549/" target="_blank" rel="noreferrer">대한비만학회</a>
+            <a href="https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf" target="_blank" rel="noreferrer">KDIGO 신장 기준</a>
+            <a href="https://www.who.int/publications/i/item/9789240088542" target="_blank" rel="noreferrer">WHO 혈색소 기준</a>
           </div>
         </section>
       )}
@@ -583,7 +606,7 @@ function AssessmentResult({
           <article className={checkupSaved ? "complete" : ""}>
             <div className="objective-entry-title">
               <i>{checkupSaved ? "✓" : "01"}</i>
-              <div><h3>건강검진</h3><p>혈압·혈당·지질·간수치</p></div>
+              <div><h3>건강검진</h3><p>복부·혈액·혈당·지질·간·신장 수치</p></div>
               <strong>+20%</strong>
             </div>
             {checkupUpload && (
@@ -655,7 +678,7 @@ function AssessmentResult({
           </article>
         </div>
         {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
-        <p className="upload-privacy">🔒 건강검진 PDF는 이 기기에서만 분석하며 서버로 전송하거나 저장하지 않습니다. 인식된 수치는 별도 입력 없이 점수와 데이터 신뢰도에 반영됩니다.</p>
+        <p className="upload-privacy">🔒 건강검진 PDF는 이 기기에서만 분석하며 서버로 전송하거나 저장하지 않습니다. 인식된 수치는 관련 건강자산 항목과 데이터 신뢰도에 반영됩니다.</p>
       </section>
       {showMethod && (
         <section className="method-panel">
@@ -687,7 +710,22 @@ function AssessmentResult({
         <div className="domain-score-list">
           {displayResult.domains.map((domain) => (
             <article key={domain.code}>
-              <div><h3>{domain.name}</h3><p>{domain.description}</p></div>
+              <div>
+                <h3>{domain.name}</h3>
+                <p>{domain.description}</p>
+                {(objectiveMetricsByDomain[domain.code]?.length ?? 0) > 0 && (
+                  <div className="domain-objective-values">
+                    <b>검진 반영</b>
+                    {objectiveMetricsByDomain[domain.code].map((item) => (
+                      <span key={`${domain.code}-${item.id}`}>
+                        <strong>{item.label}</strong>
+                        {item.value}
+                        <em>{item.wellnessScore === null ? "참고" : "점수 반영"}</em>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <i><b style={{ width: `${domain.score}%` }} /></i>
               <strong>{domain.score}</strong>
               <span className={domain.score < 60 ? "focus" : ""}>{domain.status}</span>
@@ -738,14 +776,21 @@ function AssessmentResult({
 }
 
 const CHECKUP_FIELDS = [
+  { id: "waist", label: "허리둘레", unit: "cm", min: 30, max: 250, step: 0.1 },
   { id: "systolic", label: "수축기 혈압", unit: "mmHg", min: 50, max: 260, step: 1 },
   { id: "diastolic", label: "이완기 혈압", unit: "mmHg", min: 30, max: 180, step: 1 },
+  { id: "hemoglobin", label: "혈색소", unit: "g/dL", min: 3, max: 25, step: 0.1 },
   { id: "fastingGlucose", label: "공복혈당", unit: "mg/dL", min: 30, max: 600, step: 1 },
   { id: "hba1c", label: "당화혈색소", unit: "%", min: 2, max: 20, step: 0.1 },
+  { id: "totalCholesterol", label: "총콜레스테롤", unit: "mg/dL", min: 30, max: 800, step: 1 },
   { id: "ldl", label: "LDL 콜레스테롤", unit: "mg/dL", min: 10, max: 500, step: 1 },
   { id: "hdl", label: "HDL 콜레스테롤", unit: "mg/dL", min: 5, max: 200, step: 1 },
   { id: "triglycerides", label: "중성지방", unit: "mg/dL", min: 10, max: 1500, step: 1 },
+  { id: "ast", label: "AST", unit: "U/L", min: 1, max: 2000, step: 1 },
   { id: "alt", label: "ALT", unit: "U/L", min: 1, max: 1000, step: 1 },
+  { id: "ggt", label: "감마지티피(γ-GTP)", unit: "U/L", min: 1, max: 2000, step: 1 },
+  { id: "creatinine", label: "혈청 크레아티닌", unit: "mg/dL", min: 0.1, max: 30, step: 0.01 },
+  { id: "egfr", label: "신사구체여과율(eGFR)", unit: "mL/min/1.73㎡", min: 1, max: 250, step: 1 },
 ] as const;
 
 const INBODY_FIELDS = [
@@ -805,19 +850,35 @@ function ObjectiveDataForm({
         </div>
       )}
       {type === "checkup" && (
-        <label className="objective-context-field">
-          <span>혈압 측정 환경</span>
-          <select
-            value={values.bpContext ?? "office"}
-            onChange={(event) =>
-              setValues({ ...values, bpContext: event.target.value })
-            }
-          >
-            <option value="office">의료기관(진료실) 측정</option>
-            <option value="home">가정에서 측정한 평균</option>
-          </select>
-          <small>고혈압 확인 기준은 진료실 140/90, 가정 평균 135/85 mmHg로 다릅니다.</small>
-        </label>
+        <div className="objective-context-grid">
+          <label className="objective-context-field">
+            <span>검진 기준 성별</span>
+            <select
+              value={values.sex ?? ""}
+              onChange={(event) =>
+                setValues({ ...values, sex: event.target.value })
+              }
+            >
+              <option value="">선택 안 함</option>
+              <option value="male">남성 기준</option>
+              <option value="female">여성 기준</option>
+            </select>
+            <small>허리둘레·혈색소·감마지티피처럼 성별 참고치가 다른 항목에만 사용합니다.</small>
+          </label>
+          <label className="objective-context-field">
+            <span>혈압 측정 환경</span>
+            <select
+              value={values.bpContext ?? "office"}
+              onChange={(event) =>
+                setValues({ ...values, bpContext: event.target.value })
+              }
+            >
+              <option value="office">의료기관(진료실) 측정</option>
+              <option value="home">가정에서 측정한 평균</option>
+            </select>
+            <small>고혈압 확인 기준은 진료실 140/90, 가정 평균 135/85 mmHg로 다릅니다.</small>
+          </label>
+        </div>
       )}
       <div className="objective-field-grid">
         {fields.map((field) => (

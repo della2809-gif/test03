@@ -4,7 +4,11 @@ import type {
   HealthAssessmentResult,
 } from "../health-assessment/types.ts";
 
-export type ClinicalBand = "reference" | "attention" | "medical-review";
+export type ClinicalBand =
+  | "reference"
+  | "attention"
+  | "medical-review"
+  | "context";
 
 export type MetricAssessment = {
   id: string;
@@ -36,6 +40,19 @@ const KSLA_EVIDENCE =
   "한국지질·동맥경화학회 기준: LDL <100 적정, 130–159 경계, ≥160 높음; 중성지방 <150 적정, ≥500 매우 높음; HDL <40 낮음입니다.";
 const KSSO_EVIDENCE =
   "대한비만학회 2022 지침: 한국 성인은 BMI 23–24.9를 비만 전단계, 25–29.9를 1단계, 30–34.9를 2단계, ≥35를 3단계 비만으로 분류합니다.";
+const NATIONAL_CHECKUP_EVIDENCE =
+  "보건복지부 2026 일반건강검진 결과통보서 참고치: 허리둘레 남 90/여 85 cm 이상, 혈색소 남 13–16.5/여 12–15.5 g/dL, 총콜레스테롤 <200 mg/dL, AST ≤40, ALT ≤35 U/L, γ-GTP 남 ≤63/여 ≤35 U/L입니다. 검진기관별 참고치는 다를 수 있습니다.";
+const KDIGO_EVIDENCE =
+  "KDIGO 2024 CKD 지침: eGFR 60 mL/min/1.73㎡ 미만이 3개월 이상 지속되면 만성콩팥병 기준에 해당할 수 있으며, 한 번의 결과만으로 확정하지 않습니다.";
+const WHO_HEMOGLOBIN_EVIDENCE =
+  "WHO 2024 빈혈 지침과 국가건강검진 참고치는 혈색소 해석에 성별·임신·고도·흡연 등 개인 조건을 함께 고려하도록 안내합니다.";
+
+type BiologicalSex = "male" | "female";
+
+const biologicalSex = (
+  values: Record<string, string>,
+): BiologicalSex | null =>
+  values.sex === "male" || values.sex === "female" ? values.sex : null;
 
 const numberValue = (values: Record<string, string>, id: string) => {
   const raw = values[id];
@@ -53,7 +70,9 @@ const metric = (
       ? "기준 범위"
       : input.band === "attention"
         ? "생활관리 주의"
-        : "의료진 확인",
+        : input.band === "medical-review"
+          ? "의료진 확인"
+          : "참고 수치",
 });
 
 export function assessBloodPressure(
@@ -266,6 +285,215 @@ export function assessTriglycerides(value: number): MetricAssessment {
   });
 }
 
+export function assessWaist(
+  value: number,
+  sex: BiologicalSex | null,
+): MetricAssessment {
+  const shared = {
+    id: "waist",
+    label: "허리둘레",
+    value: `${value} cm`,
+    domains: ["metabolic", "body-composition"],
+    evidence: NATIONAL_CHECKUP_EVIDENCE,
+  };
+  if (!sex) {
+    return metric({
+      ...shared,
+      band: "context",
+      interpretation:
+        "성별을 선택하면 국가건강검진의 복부비만 참고치와 비교해 관련 건강자산 점수에 반영합니다.",
+      wellnessScore: null,
+    });
+  }
+  const threshold = sex === "male" ? 90 : 85;
+  if (value >= threshold) {
+    return metric({
+      ...shared,
+      band: "attention",
+      interpretation: `국가건강검진의 복부비만 참고치(${threshold} cm 이상)에 해당합니다.`,
+      wellnessScore: 60,
+    });
+  }
+  return metric({
+    ...shared,
+    band: "reference",
+    interpretation: "국가건강검진의 복부비만 참고치 미만입니다.",
+    wellnessScore: 100,
+  });
+}
+
+export function assessHemoglobin(
+  value: number,
+  sex: BiologicalSex | null,
+): MetricAssessment {
+  const shared = {
+    id: "hemoglobin",
+    label: "혈색소",
+    value: `${value} g/dL`,
+    domains: ["energy", "circulation"],
+    evidence: `${NATIONAL_CHECKUP_EVIDENCE} ${WHO_HEMOGLOBIN_EVIDENCE}`,
+  };
+  if (!sex) {
+    return metric({
+      ...shared,
+      band: "context",
+      interpretation:
+        "성별을 선택하면 국가건강검진 혈색소 참고치와 비교해 에너지·순환 항목에 반영합니다.",
+      wellnessScore: null,
+    });
+  }
+  const [lower, upper] = sex === "male" ? [13, 16.5] : [12, 15.5];
+  if (value < lower) {
+    return metric({
+      ...shared,
+      band: "medical-review",
+      interpretation:
+        "빈혈 의심 참고치보다 낮습니다. 원인은 다양하므로 의료진 확인이 필요합니다.",
+      wellnessScore: 45,
+    });
+  }
+  if (value > upper) {
+    return metric({
+      ...shared,
+      band: "attention",
+      interpretation:
+        "국가건강검진 참고치보다 높습니다. 탈수·흡연·고도 등 개인 조건과 함께 확인하세요.",
+      wellnessScore: 70,
+    });
+  }
+  return metric({
+    ...shared,
+    band: "reference",
+    interpretation: "국가건강검진 혈색소 참고치 범위입니다.",
+    wellnessScore: 100,
+  });
+}
+
+export function assessTotalCholesterol(value: number): MetricAssessment {
+  return metric({
+    id: "totalCholesterol",
+    label: "총콜레스테롤",
+    value: `${value} mg/dL`,
+    band: value < 200 ? "reference" : "attention",
+    interpretation:
+      value < 200
+        ? "국가건강검진 참고치 미만입니다."
+        : "국가건강검진의 고콜레스테롤혈증 의심 참고치에 해당합니다.",
+    wellnessScore: value < 200 ? 100 : value < 240 ? 70 : 45,
+    domains: ["circulation"],
+    evidence: NATIONAL_CHECKUP_EVIDENCE,
+  });
+}
+
+export function assessAst(value: number): MetricAssessment {
+  return metric({
+    id: "ast",
+    label: "AST",
+    value: `${value} U/L`,
+    band: value <= 40 ? "reference" : "medical-review",
+    interpretation:
+      value <= 40
+        ? "국가건강검진 참고치 범위입니다."
+        : "간기능 이상 의심 참고치를 넘습니다. 근육 손상 등 다른 원인도 있어 의료진 확인이 필요합니다.",
+    wellnessScore: value <= 40 ? 100 : value <= 80 ? 60 : 30,
+    domains: ["liver"],
+    evidence: NATIONAL_CHECKUP_EVIDENCE,
+  });
+}
+
+export function assessAlt(value: number): MetricAssessment {
+  return metric({
+    id: "alt",
+    label: "ALT",
+    value: `${value} U/L`,
+    band: value <= 35 ? "reference" : "medical-review",
+    interpretation:
+      value <= 35
+        ? "국가건강검진 참고치 범위입니다."
+        : "간기능 이상 의심 참고치를 넘습니다. 검사실 기준과 함께 의료진 확인이 필요합니다.",
+    wellnessScore: value <= 35 ? 100 : value <= 70 ? 60 : 30,
+    domains: ["liver"],
+    evidence: NATIONAL_CHECKUP_EVIDENCE,
+  });
+}
+
+export function assessGgt(
+  value: number,
+  sex: BiologicalSex | null,
+): MetricAssessment {
+  const shared = {
+    id: "ggt",
+    label: "감마지티피(γ-GTP)",
+    value: `${value} U/L`,
+    domains: ["liver"],
+    evidence: NATIONAL_CHECKUP_EVIDENCE,
+  };
+  if (!sex) {
+    return metric({
+      ...shared,
+      band: "context",
+      interpretation:
+        "성별을 선택하면 국가건강검진 참고치와 비교해 해독 항목에 반영합니다.",
+      wellnessScore: null,
+    });
+  }
+  const threshold = sex === "male" ? 63 : 35;
+  return metric({
+    ...shared,
+    band: value <= threshold ? "reference" : "medical-review",
+    interpretation:
+      value <= threshold
+        ? "국가건강검진 참고치 범위입니다."
+        : `성별 참고치(${threshold} U/L 이하)를 넘습니다. 음주·약물 등과 함께 의료진 확인이 필요합니다.`,
+    wellnessScore: value <= threshold ? 100 : value <= threshold * 2 ? 60 : 30,
+  });
+}
+
+export function assessCreatinine(value: number): MetricAssessment {
+  return metric({
+    id: "creatinine",
+    label: "혈청 크레아티닌",
+    value: `${value} mg/dL`,
+    band: value <= 1.5 ? "context" : "medical-review",
+    interpretation:
+      value <= 1.5
+        ? "국가건강검진 참고치 이내입니다. 연령·성별·근육량 영향을 받아 eGFR과 함께 봅니다."
+        : "국가건강검진 신장기능 이상 의심 참고치를 넘습니다. eGFR과 함께 의료진 확인이 필요합니다.",
+    wellnessScore: null,
+    domains: ["circulation"],
+    evidence: `${NATIONAL_CHECKUP_EVIDENCE} ${KDIGO_EVIDENCE}`,
+  });
+}
+
+export function assessEgfr(value: number): MetricAssessment {
+  if (value < 60) {
+    return metric({
+      id: "egfr",
+      label: "신사구체여과율(eGFR)",
+      value: `${value} mL/min/1.73㎡`,
+      band: "medical-review",
+      interpretation:
+        "60 미만입니다. 한 번의 결과로 만성콩팥병을 확정하지 않으며 반복 검사와 의료진 확인이 필요합니다.",
+      wellnessScore: 40,
+      domains: ["circulation"],
+      evidence: KDIGO_EVIDENCE,
+    });
+  }
+  return metric({
+    id: "egfr",
+    label: "신사구체여과율(eGFR)",
+    value: `${value} mL/min/1.73㎡`,
+    band: "reference",
+    interpretation:
+      value < 90
+        ? "60 이상입니다. 60–89만으로 만성콩팥병을 의미하지 않으며 다른 이상 소견과 함께 봅니다."
+        : "일반적인 G1 범위입니다.",
+    wellnessScore: value < 90 ? 85 : 100,
+    domains: ["circulation"],
+    evidence: KDIGO_EVIDENCE,
+  });
+}
+
 export function assessBmi(value: number): MetricAssessment {
   const shared = {
     id: "bmi",
@@ -343,6 +571,7 @@ export function assessCheckupData(
   values: Record<string, string>,
 ): ObjectiveDataAssessment {
   const metrics: MetricAssessment[] = [];
+  const sex = biologicalSex(values);
   const systolic = numberValue(values, "systolic");
   const diastolic = numberValue(values, "diastolic");
   if (systolic !== null && diastolic !== null) {
@@ -357,16 +586,30 @@ export function assessCheckupData(
   const rules = [
     ["fastingGlucose", assessFastingGlucose],
     ["hba1c", assessHba1c],
+    ["totalCholesterol", assessTotalCholesterol],
     ["ldl", assessLdl],
     ["hdl", assessHdl],
     ["triglycerides", assessTriglycerides],
+    ["ast", assessAst],
+    ["alt", assessAlt],
+    ["creatinine", assessCreatinine],
+    ["egfr", assessEgfr],
   ] as const;
   for (const [id, rule] of rules) {
     const value = numberValue(values, id);
     if (value !== null) metrics.push(rule(value));
   }
+  const waist = numberValue(values, "waist");
+  if (waist !== null) metrics.push(assessWaist(waist, sex));
+  const hemoglobin = numberValue(values, "hemoglobin");
+  if (hemoglobin !== null) {
+    metrics.push(assessHemoglobin(hemoglobin, sex));
+  }
+  const ggt = numberValue(values, "ggt");
+  if (ggt !== null) metrics.push(assessGgt(ggt, sex));
   return summarizeObjective("checkup", metrics, [
-    "ALT는 검사실·성별별 정상 상한이 달라 현재 점수에 반영하지 않습니다.",
+    "혈청 크레아티닌은 연령·성별·근육량 영향을 받아 단독 점수화하지 않고 eGFR과 함께 참고합니다.",
+    "검진기관의 자체 참고치가 결과지에 표시된 경우 해당 기준을 우선 확인하세요.",
   ]);
 }
 
@@ -434,7 +677,7 @@ export function applyObjectiveData(
       input.bodyComposition?.sourceScore !== undefined
         ? 15
         : 0),
-    scoreVersion: "wellset-score-v2-guideline-informed",
+    scoreVersion: "wellset-score-v3-checkup-domain-linked",
     domains,
     priorities: [...domains].sort((a, b) => a.score - b.score).slice(0, 3),
   };

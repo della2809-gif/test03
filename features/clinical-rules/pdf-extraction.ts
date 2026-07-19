@@ -1,12 +1,19 @@
 export type CheckupFieldId =
+  | "waist"
   | "systolic"
   | "diastolic"
+  | "hemoglobin"
   | "fastingGlucose"
   | "hba1c"
+  | "totalCholesterol"
   | "ldl"
   | "hdl"
   | "triglycerides"
-  | "alt";
+  | "ast"
+  | "alt"
+  | "ggt"
+  | "creatinine"
+  | "egfr";
 
 export type CheckupPdfExtraction = {
   values: Partial<Record<CheckupFieldId, string>>;
@@ -15,31 +22,52 @@ export type CheckupPdfExtraction = {
 };
 
 const FIELD_IDS: CheckupFieldId[] = [
+  "waist",
   "systolic",
   "diastolic",
+  "hemoglobin",
   "fastingGlucose",
   "hba1c",
+  "totalCholesterol",
   "ldl",
   "hdl",
   "triglycerides",
+  "ast",
   "alt",
+  "ggt",
+  "creatinine",
+  "egfr",
 ];
 
 const RANGES: Record<CheckupFieldId, [number, number]> = {
+  waist: [30, 250],
   systolic: [50, 260],
   diastolic: [30, 180],
+  hemoglobin: [3, 25],
   fastingGlucose: [30, 600],
   hba1c: [2, 20],
+  totalCholesterol: [30, 800],
   ldl: [10, 500],
   hdl: [5, 200],
   triglycerides: [10, 1500],
+  ast: [1, 2000],
   alt: [1, 1000],
+  ggt: [1, 2000],
+  creatinine: [0.1, 30],
+  egfr: [1, 250],
 };
 
 const LABELS: Record<
   Exclude<CheckupFieldId, "systolic" | "diastolic">,
   RegExp[]
 > = {
+  waist: [/허리\s*둘레/i, /waist\s*circumference/i],
+  hemoglobin: [
+    /(?:^|\n)\s*혈색소/i,
+    /헤모글로빈/i,
+    /h(?:a)?emoglobin/i,
+    /\bhgb\b/i,
+  ],
   fastingGlucose: [
     /공복\s*혈당/i,
     /공복\s*혈당\s*검사/i,
@@ -47,10 +75,25 @@ const LABELS: Record<
     /fasting\s*glucose/i,
   ],
   hba1c: [/당화\s*혈색소/i, /hb\s*a1c/i, /a1c/i],
+  totalCholesterol: [
+    /총\s*콜레스테롤/i,
+    /total\s*cholesterol/i,
+    /\btc\b/i,
+  ],
   ldl: [/ldl(?:\s*[-·]?\s*콜레스테롤)?/i, /저밀도\s*콜레스테롤/i],
   hdl: [/hdl(?:\s*[-·]?\s*콜레스테롤)?/i, /고밀도\s*콜레스테롤/i],
   triglycerides: [/중성\s*지방/i, /triglycerides?/i, /\btg\b/i],
+  ast: [/\bast\b(?:\s*\(\s*sgot\s*\))?/i, /\bsgot\b/i, /아스파르테이트\s*아미노전이효소/i],
   alt: [/\balt\b(?:\s*\(\s*sgpt\s*\))?/i, /\bsgpt\b/i, /알라닌\s*아미노전이효소/i],
+  ggt: [
+    /감마\s*지티피/i,
+    /감마\s*gtp/i,
+    /γ\s*[-·]?\s*gtp/i,
+    /gamma\s*[-·]?\s*gtp/i,
+    /\bggt\b/i,
+  ],
+  creatinine: [/혈청\s*크레아티닌/i, /크레아티닌/i, /creatinine/i],
+  egfr: [/신사구체\s*여과율/i, /e\s*[-·]?\s*gfr/i, /\begfr\b/i],
 };
 
 function normalizePdfText(text: string): string {
@@ -81,7 +124,7 @@ function numberAfterLabel(
         "i",
       ),
       new RegExp(
-        `${source}[^\\n]{0,45}?([0-9]+(?:\\.[0-9]+)?)\\s*(?:mg\\s*\\/\\s*dL|%|U\\s*\\/\\s*L)`,
+        `${source}[^\\n]{0,45}?([0-9]+(?:\\.[0-9]+)?)\\s*(?:mg\\s*\\/\\s*dL|g\\s*\\/\\s*dL|%|U\\s*\\/\\s*L|IU\\s*\\/\\s*L|cm|mL\\s*\\/\\s*min(?:\\s*\\/\\s*1\\.73\\s*㎡)?)`,
         "i",
       ),
     ];
@@ -126,12 +169,19 @@ export function extractCheckupValuesFromText(
   };
 
   for (const id of [
+    "waist",
+    "hemoglobin",
     "fastingGlucose",
     "hba1c",
+    "totalCholesterol",
     "ldl",
     "hdl",
     "triglycerides",
+    "ast",
     "alt",
+    "ggt",
+    "creatinine",
+    "egfr",
   ] as const) {
     const value = numberAfterLabel(text, id);
     if (value !== undefined) values[id] = value;
